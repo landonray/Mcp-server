@@ -5,6 +5,7 @@ function mockClient() {
     get: jest.fn().mockResolvedValue({ data: {} }),
     put: jest.fn().mockResolvedValue({ data: {} }),
     post: jest.fn().mockResolvedValue({ data: {} }),
+    delete: jest.fn().mockResolvedValue({ data: {} }),
   };
 }
 
@@ -51,10 +52,35 @@ describe('Transaction tools', () => {
     expect(client.post).toHaveBeenCalledWith('/transaction/resendInvoice', { ids: [1, 2] });
   });
 
-  it('cancel_subscription converts to declined', async () => {
+  it('cancel_subscription deletes orders', async () => {
     const client = mockClient();
     await transactions.cancel_subscription(client, { ids: [10, 11] });
-    expect(client.put).toHaveBeenCalledWith('/transaction/convertToDecline', { ids: [10, 11] });
+    expect(client.delete).toHaveBeenCalledTimes(2);
+    expect(client.delete).toHaveBeenCalledWith('/order', { params: { id: 10 } });
+    expect(client.delete).toHaveBeenCalledWith('/order', { params: { id: 11 } });
+  });
+
+  it('cancel_subscription single order returns unwrapped result', async () => {
+    const client = mockClient();
+    client.delete.mockResolvedValue({ data: { id: '10' } });
+    const result = await transactions.cancel_subscription(client, { ids: [10] });
+    expect(result).toEqual({ data: { id: '10' } });
+  });
+
+  it('cancel_subscription throws if ids empty', async () => {
+    const client = mockClient();
+    await expect(transactions.cancel_subscription(client, { ids: [] })).rejects.toThrow('ids');
+  });
+
+  it('delete_order deletes single order', async () => {
+    const client = mockClient();
+    await transactions.delete_order(client, { id: 10 });
+    expect(client.delete).toHaveBeenCalledWith('/order', { params: { id: 10 } });
+  });
+
+  it('delete_order throws if id missing', async () => {
+    const client = mockClient();
+    await expect(transactions.delete_order(client, {})).rejects.toThrow('id is required');
   });
 
   it('convert_to_collections', async () => {
