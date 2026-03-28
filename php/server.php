@@ -14,9 +14,13 @@ declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
 
+use OntraportMcp\AuditLog;
 use OntraportMcp\Mcp\ServerFactory;
 use PhpMcp\Server\Transports\StdioServerTransport;
 use PhpMcp\Server\Transports\StreamableHttpServerTransport;
+
+// Initialize audit logging
+AuditLog::init();
 
 // Read credentials from environment
 $apiKey = getenv('API_KEY') ?: getenv('Api_Key') ?: '';
@@ -37,9 +41,17 @@ foreach ($argv as $arg) {
     }
 }
 
+// Credential hash for audit logging (never log the actual credentials)
+$credentialHash = hash('sha256', "{$apiKey}:{$appId}");
+
+AuditLog::logSession([
+    'event' => 'session_created',
+    'credentialHash' => $credentialHash,
+]);
+
 // Create the MCP server with all tools registered
 fwrite(STDERR, "Building tool manifest...\n");
-$server = ServerFactory::create($apiKey, $appId);
+$server = ServerFactory::create($apiKey, $appId, $credentialHash);
 
 // Start listening
 if ($useHttp) {

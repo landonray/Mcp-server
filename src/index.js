@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const { createMcpServer } = require('./mcp/server');
+const audit = require('./audit');
 
 const app = express();
 app.use(express.json());
@@ -14,22 +15,16 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
 // Cleanup interval: every 5 minutes
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
-/**
- * Hash credentials so we can verify returning sessions belong to the same account
- * without storing the raw credentials.
- */
 function hashCredentials(apiKey, appId) {
   return crypto.createHash('sha256').update(`${apiKey}:${appId}`).digest('hex');
 }
 
-/**
- * Validate Api-Key and Api-Appid headers. Returns { apiKey, appId } or sends 401 and returns null.
- */
 function validateAuth(req, res) {
   const apiKey = req.headers['api-key'];
   const appId = req.headers['api-appid'];
 
   if (!apiKey || !appId) {
+    audit.logAuthFailure({ reason: 'missing_headers', ip: req.ip });
     res.status(401).json({
       code: 401,
       error: 'unauthorized',
@@ -40,10 +35,6 @@ function validateAuth(req, res) {
   return { apiKey, appId };
 }
 
-/**
- * Look up an existing session and verify credentials match.
- * Returns the session or sends an error and returns null.
- */
 function getVerifiedSession(req, res) {
   const sessionId = req.headers['mcp-session-id'];
   if (!sessionId) {
@@ -57,17 +48,16 @@ function getVerifiedSession(req, res) {
     return null;
   }
 
-  // Verify credentials match the session
   const auth = validateAuth(req, res);
   if (!auth) return null;
 
   const hash = hashCredentials(auth.apiKey, auth.appId);
   if (hash !== session.credentialHash) {
+    audit.logSession({ event: 'session_auth_failed', sessionId, credentialHash: hash });
     res.status(403).json({ code: 403, error: 'forbidden', message: 'Credentials do not match this session.' });
     return null;
   }
 
-  // Update last activity
   session.lastActivity = Date.now();
   return session;
 }
@@ -77,12 +67,12 @@ const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [sessionId, session] of sessions) {
     if (now - session.lastActivity > SESSION_TTL_MS) {
+      audit.logSession({ event: 'session_expired', sessionId, credentialHash: session.credentialHash });
       sessions.delete(sessionId);
     }
   }
 }, CLEANUP_INTERVAL_MS);
 
-// Don't let the timer prevent process exit
 if (cleanupTimer.unref) {
   cleanupTimer.unref();
 }
@@ -100,15 +90,14 @@ app.post('/v1', async (req, res) => {
   const { apiKey, appId } = auth;
   const credentialHash = hashCredentials(apiKey, appId);
 
-  // Check for existing session
   const sessionId = req.headers['mcp-session-id'];
   let transport;
 
   if (sessionId && sessions.has(sessionId)) {
     const session = sessions.get(sessionId);
 
-    // Verify credentials match the session
     if (session.credentialHash !== credentialHash) {
+      audit.logSession({ event: 'session_auth_failed', sessionId, credentialHash });
       return res.status(403).json({
         code: 403,
         error: 'forbidden',
@@ -119,7 +108,7 @@ app.post('/v1', async (req, res) => {
     session.lastActivity = Date.now();
     transport = session.transport;
   } else {
-    // New session: create Server + Transport pair scoped to these credentials
+    // New session
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => crypto.randomUUID(),
       enableJsonResponse: true,
@@ -130,15 +119,19 @@ app.post('/v1', async (req, res) => {
           credentialHash,
           lastActivity: Date.now(),
         });
+        audit.logSession({ event: 'session_created', sessionId: newSessionId, credentialHash });
       },
     });
 
     transport.onclose = () => {
       const sid = transport.sessionId;
-      if (sid) sessions.delete(sid);
+      if (sid) {
+        audit.logSession({ event: 'session_closed', sessionId: sid, credentialHash });
+        sessions.delete(sid);
+      }
     };
 
-    const server = createMcpServer(apiKey, appId);
+    const server = createMcpServer(apiKey, appId, { sessionId: transport.sessionId, credentialHash });
 
     await server.connect(transport);
   }
@@ -146,7 +139,6 @@ app.post('/v1', async (req, res) => {
   try {
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
-    // Log error message only — never log full error objects which could contain credentials
     console.error('MCP request error:', err.message || 'Unknown error');
     if (!res.headersSent) {
       res.status(500).json({
@@ -180,8 +172,9 @@ app.delete('/v1', async (req, res) => {
 
   try {
     await session.transport.handleRequest(req, res);
-    const sessionId = req.headers['mcp-session-id'];
-    sessions.delete(sessionId);
+    const sid = req.headers['mcp-session-id'];
+    audit.logSession({ event: 'session_closed', sessionId: sid, credentialHash: session.credentialHash });
+    sessions.delete(sid);
   } catch (err) {
     console.error('MCP session close error:', err.message || 'Unknown error');
     if (!res.headersSent) {
