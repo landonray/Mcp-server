@@ -46,7 +46,8 @@ router.post('/v1', async (req, res) => {
       return res.status(err.code).json(err.toJSON());
     }
 
-    console.error('Unhandled MCP error:', err);
+    // Log error message only — never log full error objects which could contain credentials
+    console.error('Unhandled MCP error:', err.message || 'Unknown error');
     return res.status(500).json({
       jsonrpc: '2.0',
       id: jsonRpcRequest?.id || null,

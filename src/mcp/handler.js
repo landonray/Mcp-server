@@ -56,7 +56,9 @@ async function handleToolCall(apiKey, appId, params) {
 
   const { name, arguments: args } = params;
   const client = new OntraportClient(apiKey, appId);
-  const handler = getHandler(name);
+
+  // getHandler is async — resolves custom object tools via /objects/meta if needed
+  const handler = await getHandler(name, client);
 
   if (!handler) {
     throw badRequest(`Unknown tool: ${name}`);

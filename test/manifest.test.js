@@ -68,6 +68,41 @@ describe('Manifest Builder', () => {
     expect(note.description).toContain('additional custom objects');
   });
 
+  it('truncates at whole-object boundaries (groups of 4)', async () => {
+    const metaData = {};
+    for (let i = 0; i < 30; i++) {
+      metaData[String(10000 + i)] = {
+        name: `Obj${i}`,
+        last_modified: String(1000 + i),
+      };
+    }
+    const client = mockClient({ data: metaData });
+    const manifest = await buildManifest(client);
+
+    // Each included custom object should have exactly 4 tools
+    const customTools = manifest.filter(t =>
+      t.name !== '_manifest_note' &&
+      !staticTools.some(st => st.name === t.name)
+    );
+    expect(customTools.length % 4).toBe(0);
+  });
+
+  it('does not leak internal fields into manifest entries', async () => {
+    const client = mockClient({
+      data: {
+        '10000': { name: 'Widget', last_modified: '1000' },
+      },
+    });
+    const manifest = await buildManifest(client);
+    for (const tool of manifest) {
+      expect(tool._objectTypeId).toBeUndefined();
+      expect(tool._objectName).toBeUndefined();
+      expect(tool.module).toBeUndefined();
+      expect(tool.objectTypeId).toBeUndefined();
+      expect(tool.objectName).toBeUndefined();
+    }
+  });
+
   it('sorts custom objects by most recently modified', async () => {
     const client = mockClient({
       data: {

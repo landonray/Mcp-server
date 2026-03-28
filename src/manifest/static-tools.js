@@ -11,7 +11,7 @@ const paginationProperties = {
 const conditionProperty = {
   condition: {
     type: 'string',
-    description: "JSON-encoded array of criteria objects for filtering. Example: [{\"field\":{\"field\":\"lastname\"},\"op\":\"=\",\"value\":{\"value\":\"Smith\"}}]. Join multiple with 'AND' or 'OR'.",
+    description: "JSON-encoded array of criteria objects for filtering. Structure: [{\"field\":{\"field\":\"<name>\"},\"op\":\"<operator>\",\"value\":{\"value\":\"<val>\"}}]. Supported operators: =, >, <, >=, <=, IN, CONTAINS, DOES NOT CONTAIN. For IN: use {\"list\":[{\"value\":1},{\"value\":2}]} as the value. Compound conditions: insert 'AND' or 'OR' strings between criteria objects in the array. All date fields must be Unix timestamps (seconds). List selection fields use */* delimiters, e.g. \"*/*1*/*2*/*\".",
   },
 };
 

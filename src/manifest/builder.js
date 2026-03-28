@@ -1,28 +1,9 @@
 const { staticTools } = require('./static-tools');
-const { generateCustomObjectTools, sanitizeName } = require('./custom-object-tools');
-const { registerCustomObject, clearCustomObjects } = require('../tools/registry');
-
-// Built-in object type IDs that are already covered by static tools
-const BUILTIN_OBJECT_TYPE_IDS = new Set([
-  0,   // Contact
-  1,   // Task
-  3,   // Group
-  5,   // Sequence
-  6,   // Rule
-  7,   // Message
-  12,  // Note
-  14,  // Tag
-  16,  // Product
-  17,  // Purchase
-  30,  // Purchase History Log
-  44,  // Open Order
-  46,  // Transaction
-  52,  // Order
-  138, // Tag Subscriber
-  140, // Campaign/Automation
-]);
+const { generateCustomObjectTools } = require('./custom-object-tools');
+const { BUILTIN_OBJECT_TYPE_IDS } = require('./builder-constants');
 
 const MAX_MANIFEST_TOOLS = 100;
+const TOOLS_PER_CUSTOM_OBJECT = 4;
 
 async function buildManifest(client) {
   // Fetch object metadata — this call must succeed or we fail completely
@@ -54,31 +35,23 @@ async function buildManifest(client) {
     return bTime - aTime;
   });
 
-  // Clear previous custom object registrations and generate new ones
-  clearCustomObjects();
-
-  let customToolEntries = [];
-  for (const obj of customObjects) {
-    const tools = generateCustomObjectTools(obj);
-    const safeName = sanitizeName(obj.name);
-
-    // Register each custom object tool in the handler registry
-    registerCustomObject(`get_${safeName}`, obj.objectTypeId, 'get');
-    registerCustomObject(`create_${safeName}`, obj.objectTypeId, 'create');
-    registerCustomObject(`update_${safeName}`, obj.objectTypeId, 'update');
-    registerCustomObject(`search_${safeName}`, obj.objectTypeId, 'search');
-
-    customToolEntries.push(...tools.map(toolToManifestEntry));
-  }
-
-  // Enforce 100-tool cap
+  // Enforce 100-tool cap at whole-object boundaries (4 tools per object)
   const staticCount = staticManifest.length;
   const availableSlots = MAX_MANIFEST_TOOLS - staticCount;
+  const maxCustomObjects = Math.floor(availableSlots / TOOLS_PER_CUSTOM_OBJECT);
   let truncated = false;
 
-  if (customToolEntries.length > availableSlots) {
-    customToolEntries = customToolEntries.slice(0, availableSlots);
+  let includedCustomObjects = customObjects;
+  if (customObjects.length > maxCustomObjects) {
+    includedCustomObjects = customObjects.slice(0, maxCustomObjects);
     truncated = true;
+  }
+
+  // Generate custom object tools only for included objects
+  let customToolEntries = [];
+  for (const obj of includedCustomObjects) {
+    const tools = generateCustomObjectTools(obj);
+    customToolEntries.push(...tools.map(toolToManifestEntry));
   }
 
   const manifest = [...staticManifest, ...customToolEntries];
@@ -96,17 +69,13 @@ async function buildManifest(client) {
 }
 
 function toolToManifestEntry(tool) {
-  const entry = {
+  // Only expose name, description, and inputSchema to agents.
+  // Internal fields (module, objectTypeId, objectName) are stripped.
+  return {
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
   };
-  // Preserve objectTypeId for dynamic dispatch in the registry
-  if (tool.objectTypeId !== undefined) {
-    entry._objectTypeId = tool.objectTypeId;
-    entry._objectName = tool.objectName;
-  }
-  return entry;
 }
 
 module.exports = { buildManifest, BUILTIN_OBJECT_TYPE_IDS, MAX_MANIFEST_TOOLS };

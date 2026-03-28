@@ -8,7 +8,8 @@ app.use(transport);
 
 // Global error handler
 app.use((err, _req, res, _next) => {
-  console.error('Unhandled error:', err);
+  // Log error message only — never log full error objects which could contain credentials
+  console.error('Unhandled error:', err.message || 'Unknown error');
   res.status(500).json({
     code: 500,
     error: 'server_error',
