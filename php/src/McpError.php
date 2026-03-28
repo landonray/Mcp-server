@@ -8,12 +8,14 @@ class McpError extends \Exception
 {
     public int $statusCode;
     public string $errorType;
+    public ?string $retryAfter;
 
     public function __construct(int $statusCode, string $errorType, string $message)
     {
         parent::__construct($message);
         $this->statusCode = $statusCode;
         $this->errorType = $errorType;
+        $this->retryAfter = null;
     }
 
     public function toArray(): array
@@ -35,12 +37,12 @@ class McpError extends \Exception
         return new self(401, 'unauthorized', $message);
     }
 
-    public static function forbidden(string $message = 'The API key does not have the required scope for this operation.'): self
+    public static function forbidden(string $message = 'The API key does not have the required scope for this operation. Report the missing scope to the user.'): self
     {
         return new self(403, 'forbidden', $message);
     }
 
-    public static function notFound(string $message = 'The requested object ID does not exist. Verify object IDs before retrying.'): self
+    public static function notFound(string $message = 'The requested object ID does not exist, or the endpoint URL is incorrect. Verify object IDs before retrying.'): self
     {
         return new self(404, 'not_found', $message);
     }
@@ -53,10 +55,11 @@ class McpError extends \Exception
     public static function rateLimited(?string $retryAfter = null): self
     {
         $err = new self(429, 'rate_limited', 'Retry after a backoff. Ontraport allows 180 requests/minute/account.');
+        $err->retryAfter = $retryAfter;
         return $err;
     }
 
-    public static function serverError(string $message = 'Retry with exponential backoff (max 3 attempts).'): self
+    public static function serverError(string $message = 'Retry with exponential backoff (max 3 attempts). If persistent, report to the user.'): self
     {
         return new self(500, 'server_error', $message);
     }
