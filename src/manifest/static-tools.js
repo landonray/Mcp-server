@@ -534,13 +534,25 @@ const staticTools = [
   },
   {
     name: 'cancel_subscription',
-    description: "Cancel one or more active subscriptions by converting their transactions to declined status. This stops all future recurring charges. The associated open orders will no longer be billed. This cannot be undone — to restart billing, a new transaction must be created.",
+    description: "Cancel one or more active subscriptions by deleting their order records. This removes the recurring payment schedule and stops all future charges. Associated open orders will no longer be billed. This cannot be undone — to restart billing, a new transaction must be created.",
     inputSchema: {
       type: 'object',
       properties: {
-        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of transaction IDs whose subscriptions should be cancelled.' },
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of order IDs to cancel. Use get_orders to find order IDs for a contact.' },
       },
       required: ['ids'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'delete_order',
+    description: "Delete a single order record. This removes the future payment schedule (subscription or payment plan). The original transaction remains but no further charges will be made. Use get_orders to find order IDs.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'Order ID to delete.' },
+      },
+      required: ['id'],
     },
     module: 'transactions',
   },

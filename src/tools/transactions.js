@@ -27,7 +27,23 @@ async function resend_invoice(client, params) {
 }
 
 async function cancel_subscription(client, params) {
-  return client.put('/transaction/convertToDecline', { ids: params.ids });
+  if (!params.ids || !params.ids.length) {
+    throw badRequest('ids (array of order IDs) is required for cancel_subscription.');
+  }
+  // Delete orders one at a time since DELETE /order takes a single id
+  const results = [];
+  for (const id of params.ids) {
+    const result = await client.delete('/order', { params: { id } });
+    results.push(result);
+  }
+  return results.length === 1 ? results[0] : { data: results };
+}
+
+async function delete_order(client, params) {
+  if (params.id === undefined) {
+    throw badRequest('id is required for delete_order.');
+  }
+  return client.delete('/order', { params: { id: params.id } });
 }
 
 async function convert_to_collections(client, params) {
@@ -98,6 +114,7 @@ module.exports = {
   rerun_transaction,
   resend_invoice,
   cancel_subscription,
+  delete_order,
   convert_to_collections,
   process_transaction,
   log_transaction,
