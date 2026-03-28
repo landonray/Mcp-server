@@ -9,8 +9,6 @@ const transactions = require('./transactions');
 const products = require('./products');
 const customObjects = require('./custom-objects');
 const metadata = require('./metadata');
-const { sanitizeName } = require('../manifest/custom-object-tools');
-const { BUILTIN_OBJECT_TYPE_IDS } = require('../manifest/builder-constants');
 
 // Static tool name → handler mapping
 const staticHandlers = {
@@ -94,7 +92,6 @@ function parseCustomToolName(toolName) {
     const prefix = `${op}_`;
     if (toolName.startsWith(prefix)) {
       const suffix = toolName.slice(prefix.length);
-      // Make sure it's not a static tool
       if (!staticHandlers[toolName] && suffix.length > 0) {
         return { operation: op, suffix };
       }
@@ -104,48 +101,27 @@ function parseCustomToolName(toolName) {
 }
 
 /**
- * Resolve a custom object tool name to its objectTypeId by calling /objects/meta.
- * This makes tools/call self-sufficient — no dependency on prior tools/list.
- */
-async function resolveCustomObjectTypeId(client, suffix) {
-  const metaResponse = await client.get('/objects/meta');
-  const objectMeta = metaResponse.data || metaResponse;
-
-  for (const [typeId, meta] of Object.entries(objectMeta)) {
-    const id = parseInt(typeId, 10);
-    if (BUILTIN_OBJECT_TYPE_IDS.has(id)) continue;
-    if (!meta || !meta.name) continue;
-
-    const safeName = sanitizeName(meta.name);
-    if (safeName === suffix) {
-      return id;
-    }
-  }
-  return null;
-}
-
-function getStaticHandler(toolName) {
-  return staticHandlers[toolName] || null;
-}
-
-/**
  * Get a handler for a tool. For static tools returns immediately.
- * For custom object tools, resolves the objectTypeId via /objects/meta.
- * Returns a function (client, params) => result, or null if not found.
+ * For custom object tools, looks up the objectTypeId from the cached
+ * customObjectMap (built during tools/list) — no extra API call.
+ *
+ * @param {string} toolName
+ * @param {Map<string, number>} customObjectMap - safeName → objectTypeId, from buildManifest
+ * @returns {Function|null} handler function (client, params) => result
  */
-async function getHandler(toolName, client) {
+function getHandler(toolName, customObjectMap) {
   // Check static handlers first
   if (staticHandlers[toolName]) {
     return staticHandlers[toolName];
   }
 
-  // Try to resolve as a custom object tool
+  // Try to resolve as a custom object tool using the cached map
   const parsed = parseCustomToolName(toolName);
-  if (parsed) {
-    const objectTypeId = await resolveCustomObjectTypeId(client, parsed.suffix);
-    if (objectTypeId !== null) {
+  if (parsed && customObjectMap) {
+    const objectTypeId = customObjectMap.get(parsed.suffix);
+    if (objectTypeId !== undefined) {
       const handler = CUSTOM_HANDLERS[parsed.operation];
-      return (c, params) => handler(c, params, objectTypeId);
+      return (client, params) => handler(client, params, objectTypeId);
     }
   }
 
@@ -154,7 +130,6 @@ async function getHandler(toolName, client) {
 
 module.exports = {
   getHandler,
-  getStaticHandler,
   staticHandlers,
   parseCustomToolName,
 };
