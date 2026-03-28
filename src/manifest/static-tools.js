@@ -534,7 +534,7 @@ const staticTools = [
   },
   {
     name: 'cancel_subscription',
-    description: "Cancel one or more active subscriptions by deleting their order records. This removes the recurring payment schedule and stops all future charges. Associated open orders will no longer be billed. This cannot be undone — to restart billing, a new transaction must be created.",
+    description: "Cancel one or more active subscriptions by deleting their order records. This removes the recurring payment schedule and stops all future charges. Associated open orders will no longer be billed. This cannot be undone — to restart billing, a new transaction must be created. To collect all remaining payments on a payment plan immediately instead of canceling: (1) use get_open_orders filtered by contact_id to find payment_remaining and payment_amount, (2) use process_transaction to charge a one-time amount for the remaining balance, (3) use cancel_subscription to remove the old plan.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -630,7 +630,7 @@ const staticTools = [
   },
   {
     name: 'update_order',
-    description: "Update an existing order's payment schedule. WARNING: You must include the full offer data — if offer data is omitted, the order will be deleted. The safest workflow is: (1) use get_order to get the order's offer_id, (2) use get_object_meta with objectID=65 to understand the offer structure, (3) retrieve the offer via GET /object with objectID=65 and the offer_id, (4) modify the offer data as needed, (5) pass the modified offer back with offer_id and order_id included. Can be used to change the price, billing cycle, credit card (cc_id), gateway, or product.",
+    description: "Update an existing order's payment schedule. WARNING: You must include the full offer data — if offer data is omitted, the order will be deleted. The safest workflow is: (1) use get_order to get the order's offer_id and order id, (2) retrieve the current offer data by calling get_object_meta with objectID=65 then fetching the offer via GET /object with objectID=65 and the offer_id, (3) modify the offer data as needed (e.g., change price in the products array, or update cc_id to change the card), (4) pass the modified offer back with offer_id and order_id included. Can be used to change the price, billing cycle, credit card (cc_id), gateway, or product. To defer the next charge date on a subscription (e.g., push it one month out), retrieve the current offer, include it unchanged, and Ontraport will recalculate the schedule. To change the billing amount, modify the price field in the products array of the offer data.",
     inputSchema: {
       type: 'object',
       properties: {
