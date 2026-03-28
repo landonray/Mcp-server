@@ -17,6 +17,7 @@ const conditionProperty = {
 
 const searchProperty = {
   search: { type: 'string', description: 'Free-text search across all fields.' },
+  searchNotes: { type: 'boolean', description: 'When true, also search notes for the search string. Must be used with the search parameter.' },
 };
 
 const staticTools = [
@@ -28,7 +29,8 @@ const staticTools = [
       type: 'object',
       properties: {
         id: { type: 'integer', description: 'The contact ID to retrieve.' },
-        email: { type: 'string', description: 'The email address to look up.' },
+        email: { type: 'string', description: 'The email address to look up. If the account has duplicate emails, use all=1 to get all matching IDs.' },
+        all: { type: 'integer', description: 'When looking up by email: 0 (default) returns the first matching ID, 1 returns an array of all matching IDs.' },
       },
     },
     module: 'contacts',
@@ -42,6 +44,7 @@ const staticTools = [
         ...conditionProperty,
         ...searchProperty,
         listFields: { type: 'string', description: 'Comma-separated field names to include in results.' },
+        externs: { type: 'string', description: 'Comma-delimited list of related external fields to retrieve from associated objects.' },
         ...paginationProperties,
       },
     },
@@ -63,12 +66,13 @@ const staticTools = [
   },
   {
     name: 'merge_or_create_contact',
-    description: "Look up a contact by email. If one exists, update it with the supplied fields. If none exists, create a new contact. This is the safest tool for agent use cases where you don't know if a contact already exists. Uses email as the unique matching key.",
+    description: "Look up a contact by email (or unique_id). If one exists, update it with the supplied fields. If none exists, create a new contact. This is the safest tool for agent use cases where you don't know if a contact already exists. Uses email as the unique matching key. Can also match on unique_id (which takes precedence over email if both are provided). Note: merging on the id field is NOT supported and may cause unintended consequences — use update_contact for ID-based updates.",
     inputSchema: {
       type: 'object',
       properties: {
         email: { type: 'string', description: 'Email address used as the unique matching key.' },
-        ignore_blanks: { type: 'boolean', description: "When true, empty strings won't overwrite existing values." },
+        unique_id: { type: 'string', description: 'A system-generated unique identifier. If provided and matches an existing contact, that contact is updated. Takes precedence over email.' },
+        ignore_blanks: { type: 'boolean', description: "When true, empty strings won't overwrite existing values. Does not ignore 0 or boolean false." },
       },
       required: ['email'],
       additionalProperties: true,
@@ -334,6 +338,20 @@ const staticTools = [
     module: 'tasks',
   },
 
+  {
+    name: 'reschedule_task',
+    description: "Reschedule a task to a different date and time.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'The task ID to reschedule.' },
+        newtime: { type: 'integer', description: 'The new date and time as a Unix timestamp (seconds).' },
+      },
+      required: ['id', 'newtime'],
+    },
+    module: 'tasks',
+  },
+
   // ── Notes ──
   {
     name: 'create_note',
@@ -570,21 +588,25 @@ const staticTools = [
   },
   {
     name: 'process_transaction',
-    description: "Charge a contact's card on file to process a new transaction. Supports one-time purchases, subscriptions (recurring billing), payment plans (installments), and trial periods. Requires an offer with products and a payer_id referencing a credit card already saved on the contact's record. This tool does NOT accept new card details — only cards on file. When the offer includes a subscription or payment plan, Ontraport charges the first payment and automatically creates open orders for future charges. Agents should confirm with the user before executing, as this charges real money.",
+    description: "Charge a contact's card on file to process a new transaction. Supports one-time purchases, subscriptions (recurring billing), payment plans (installments), and trial periods. This tool does NOT accept new card details — only cards on file via cc_id. If cc_id is omitted, the contact's default card is charged. When the offer includes a subscription or payment plan, Ontraport charges the first payment and automatically creates open orders for future charges. Products can have: trial_period_unit/trial_period_count/trial_price for trials, delay_start for deferred start (days), setup_fee/setup_fee_when ('immediately'|'after_trial'|'on_date')/setup_fee_date for one-time fees, and type must be 'subscription', 'one_time', or 'payment_plan'. Agents should confirm with the user before executing, as this charges real money.",
     inputSchema: {
       type: 'object',
       properties: {
         contact_id: { type: 'integer', description: 'Contact ID to charge.' },
-        payer_id: { type: 'integer', description: "ID of the credit card on file to charge. Use the contact's saved card ID." },
+        cc_id: { type: 'integer', description: "ID of the credit card on file to charge. If omitted, the contact's default card is used. Do NOT pass raw card numbers." },
+        gateway_id: { type: 'integer', description: 'Payment gateway ID. This is the ID of the gateway object itself, not the external_id.' },
         offer: {
           type: 'object',
-          description: 'Offer data with products, pricing, and optional recurring/tax/shipping config. Structure: { name: "Offer Name", products: [{ id: <product_id>, quantity: <qty>, shipping: true/false, tax: true/false }], subscriptions: [{ product_id, price, payment_count: 1, unit: "month"|"week"|"day"|"quarter"|"year" }], paymentPlans: [{ product_id, price, payment_count: <n>, unit }], trials: [{ product_id, price: 0, payment_count: <n>, unit }], taxes: [{ id: <tax_id>, rate: <percent>, name: "Tax", taxShipping: true/false }], shipping: { id: <shipping_id>, price: <amount>, name: "Shipping" }, shipping_charge_reoccurring_orders: true/false, invoice_template: 1 }. Use list_products to find product IDs. Subscriptions and payment plans cannot coexist on the same product. A trial precedes the subscription/plan and charges a reduced (or zero) price for the trial period.',
+          description: "Offer data with products and pricing. Each product: { id (required, existing product ID), quantity, total, shipping (bool), tax (bool), type ('subscription'|'one_time'|'payment_plan'), price: [{ price, payment_count, unit ('day'|'week'|'month'|'quarter'|'year'), id }], owner, trial_period_unit, trial_period_count, trial_price, setup_fee, setup_fee_when ('immediately'|'after_trial'|'on_date'), setup_fee_date (Unix timestamp), delay_start (days to delay subscription start), subscription_count, subscription_unit, offer_to_affiliates, level1, level2 }. Offer-level: { products (required), taxes: [{ id, rate, name, taxShipping }], shipping: [{ id, name, price }], delay (days), hasTaxes, hasShipping, shipping_charge_recurring_orders, send_recurring_invoice (bool, send invoice with each recurring charge), currency_code (3-letter code if multi-currency enabled) }.",
         },
-        gateway_id: { type: 'integer', description: 'Payment gateway ID. Required if the account has multiple gateways.' },
-        invoice_template: { type: 'integer', description: 'Invoice template ID. Use 0 to suppress invoice email, or 1 for default.' },
+        invoice_template: { type: 'integer', description: 'Invoice template ID. Use -1 to suppress invoice email, or 1 for default.' },
+        trans_date: { type: 'integer', description: 'Transaction date in MILLISECONDS since Unix Epoch (not seconds). If omitted, current time is used.' },
+        external_order_id: { type: 'string', description: 'Optional external order ID to save with the transaction.' },
+        customer_note: { type: 'string', description: 'Customer-facing note attached to the transaction.' },
+        internal_note: { type: 'string', description: 'Internal-facing note attached to the transaction.' },
         billing_address: {
           type: 'object',
-          description: 'Billing address override.',
+          description: 'Billing address. Only required if not already on file for this contact.',
           properties: {
             address: { type: 'string' },
             address2: { type: 'string' },
@@ -595,13 +617,13 @@ const staticTools = [
           },
         },
       },
-      required: ['contact_id', 'payer_id', 'offer'],
+      required: ['contact_id', 'gateway_id', 'offer'],
     },
     module: 'transactions',
   },
   {
     name: 'log_transaction',
-    description: "Record a transaction without processing any payment. Use this to log offline sales (cash, check, wire transfer) or to document transactions that were handled outside of Ontraport. No card is charged. Supports the same offer structure as process_transaction including subscriptions and payment plans.",
+    description: "Record a transaction without processing any payment. Use this to log offline sales (cash, check, wire transfer) or to document transactions that were handled outside of Ontraport. No card is charged. Same offer structure as process_transaction.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -610,7 +632,11 @@ const staticTools = [
           type: 'object',
           description: 'Offer data — same structure as process_transaction. Supports products, subscriptions, payment plans, trials, taxes, and shipping.',
         },
-        invoice_template: { type: 'integer', description: 'Invoice template ID. Use 0 to suppress invoice email, or 1 for default.' },
+        invoice_template: { type: 'integer', description: 'Invoice template ID. Use -1 to suppress, or 1 for default.' },
+        trans_date: { type: 'integer', description: 'Transaction date in MILLISECONDS since Unix Epoch.' },
+        external_order_id: { type: 'string', description: 'Optional external order ID.' },
+        customer_note: { type: 'string', description: 'Customer-facing note.' },
+        internal_note: { type: 'string', description: 'Internal-facing note.' },
       },
       required: ['contact_id', 'offer'],
     },

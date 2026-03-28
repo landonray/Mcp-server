@@ -57,19 +57,30 @@ async function process_transaction(client, params) {
   if (!params.offer) {
     throw badRequest('offer is required for process_transaction.');
   }
-  if (!params.payer_id && params.payer_id !== 0) {
-    throw badRequest('payer_id (credit card on file ID) is required. New card details are not accepted — use a card already on file.');
+  if (!params.gateway_id) {
+    throw badRequest('gateway_id is required for process_transaction.');
   }
 
   const body = {
     contact_id: params.contact_id,
-    chargeNow: 1,
+    chargeNow: 'chargeNow',
     offer: params.offer,
-    payer: { id: params.payer_id },
+    gateway_id: params.gateway_id,
+    invoice_template: params.invoice_template !== undefined ? params.invoice_template : 1,
   };
-  if (params.gateway_id !== undefined) body.gateway_id = params.gateway_id;
-  if (params.invoice_template !== undefined) body.invoice_template = params.invoice_template;
+
+  // Card on file: cc_id or payer.id. If neither provided, charges default card.
+  if (params.cc_id !== undefined) {
+    body.cc_id = params.cc_id;
+  } else if (params.payer_id !== undefined) {
+    body.cc_id = params.payer_id;
+  }
+
   if (params.billing_address) body.billing_address = params.billing_address;
+  if (params.trans_date !== undefined) body.trans_date = params.trans_date;
+  if (params.external_order_id) body.external_order_id = params.external_order_id;
+  if (params.customer_note) body.customer_note = params.customer_note;
+  if (params.internal_note) body.internal_note = params.internal_note;
 
   return client.post('/transaction/processManual', body);
 }
@@ -84,10 +95,14 @@ async function log_transaction(client, params) {
 
   const body = {
     contact_id: params.contact_id,
-    chargeNow: 0,
+    chargeNow: 'chargeLog',
     offer: params.offer,
   };
   if (params.invoice_template !== undefined) body.invoice_template = params.invoice_template;
+  if (params.trans_date !== undefined) body.trans_date = params.trans_date;
+  if (params.external_order_id) body.external_order_id = params.external_order_id;
+  if (params.customer_note) body.customer_note = params.customer_note;
+  if (params.internal_note) body.internal_note = params.internal_note;
 
   return client.post('/transaction/processManual', body);
 }

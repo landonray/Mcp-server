@@ -56,4 +56,13 @@ describe('Task tools', () => {
       sort: 'date_due', sortDir: 'asc', start: 0, range: 10,
     });
   });
+
+  it('reschedule_task posts with id and newtime', async () => {
+    const client = mockClient();
+    await tasks.reschedule_task(client, { id: 2, newtime: 1713628490 });
+    expect(client.post).toHaveBeenCalledWith('/task/reschedule', {
+      id: 2,
+      newtime: 1713628490,
+    });
+  });
 });

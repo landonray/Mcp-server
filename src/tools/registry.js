@@ -40,6 +40,7 @@ const staticHandlers = {
   complete_task: tasks.complete_task,
   cancel_task: tasks.cancel_task,
   update_task: tasks.update_task,
+  reschedule_task: tasks.reschedule_task,
   get_tasks: tasks.get_tasks,
 
   // Notes

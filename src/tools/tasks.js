@@ -42,10 +42,18 @@ async function get_tasks(client, params) {
   return client.get('/Tasks', query);
 }
 
+async function reschedule_task(client, params) {
+  return client.post('/task/reschedule', {
+    id: params.id,
+    newtime: params.newtime,
+  });
+}
+
 module.exports = {
   assign_task,
   complete_task,
   cancel_task,
   update_task,
+  reschedule_task,
   get_tasks,
 };
