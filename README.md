@@ -25,7 +25,7 @@ The server is a **translation layer**. It receives tool calls from AI agents, au
   - [Notes (2 tools)](#notes-2-tools)
   - [Messages (2 tools)](#messages-2-tools)
   - [Purchases & Orders (5 tools)](#purchases--orders-5-tools)
-  - [Transactions Write (6 tools)](#transactions-write-6-tools)
+  - [Transactions Write (10 tools)](#transactions-write-10-tools)
   - [Products (2 tools)](#products-2-tools)
   - [Custom Objects (4 tools per object)](#custom-objects-4-tools-per-object)
   - [Metadata & Discovery (2 tools)](#metadata--discovery-2-tools)
@@ -171,7 +171,7 @@ When an agent calls `tools/list`, the server:
 1. Calls `GET /objects/meta` on the Ontraport API using the agent's credentials
 2. Identifies custom objects (anything not in the built-in object type ID list)
 3. Generates 4 tool definitions per custom object (`get_`, `create_`, `update_`, `search_`)
-4. Merges the 41 static tools with the dynamically generated custom object tools
+4. Merges the 45 static tools with the dynamically generated custom object tools
 5. Enforces the 100-tool manifest cap (see [Manifest Size Guard](#manifest-size-guard))
 6. Returns the complete tool list
 
@@ -236,7 +236,7 @@ src/
     ├── notes.js                    # 2 note tools
     ├── messages.js                 # 2 message tools
     ├── purchases.js                # 5 purchase/order read tools
-    ├── transactions.js             # 6 transaction write tools
+    ├── transactions.js             # 10 transaction write tools
     ├── products.js                 # 2 product tools
     ├── custom-objects.js           # Generic CRUD handlers for custom objects
     └── metadata.js                 # 2 metadata/discovery tools
@@ -338,12 +338,16 @@ test/
 | `get_orders` | Retrieve order records (subscriptions, payment plans). | `GET /Orders` |
 | `get_open_orders` | Retrieve active subscription records. | `GET /OpenOrders` |
 
-### Transactions Write (6 tools)
+### Transactions Write (10 tools)
 
 These tools modify financial records. Agents should confirm with the user before executing.
 
 | Tool | Description | API Endpoint |
 |------|-------------|-------------|
+| `process_transaction` | Charge a contact's card on file. Requires offer with products and a saved card ID. Does NOT accept new card details. | `POST /transaction/processManual` |
+| `log_transaction` | Record a transaction without charging (offline sales, cash, check). | `POST /transaction/processManual` (chargeNow=0) |
+| `get_order` | Retrieve order details for a transaction (subscription schedule, next charge date). | `GET /transaction/order` |
+| `update_order` | Update an order's next charge date, amount, or other fields. | `PUT /transaction/order` |
 | `refund_transaction` | Refund through original payment gateway. Cannot be undone. | `PUT /transaction/refund` |
 | `void_transaction` | Void an unsettled transaction. | `PUT /transaction/void` |
 | `write_off_transaction` | Write off unpaid transactions (bad debt). | `PUT /transaction/writeOff` |
@@ -469,7 +473,7 @@ Error response format:
 
 If an account has many custom objects, the manifest can exceed what fits in an LLM's context window. The server enforces a maximum of **100 tools**:
 
-1. All 41 static tools are always included
+1. All 45 static tools are always included
 2. Custom objects are sorted by most recently modified
 3. Custom object tools are included in groups of 4 (one complete object at a time) until the limit is reached
 4. If truncated, a `_manifest_note` tool is added telling the agent that additional objects exist and can be discovered via `get_object_meta`
@@ -501,7 +505,7 @@ The server does not add its own rate limiting. It inherits Ontraport's limit of 
 npm test
 ```
 
-The test suite includes **85 tests across 17 suites**:
+The test suite includes **100 tests across 17 suites**:
 
 | Suite | Coverage |
 |-------|----------|
@@ -518,7 +522,7 @@ The test suite includes **85 tests across 17 suites**:
 | `tools/notes.test.js` | Both note tools — objectID=12 injection |
 | `tools/messages.test.js` | All 2 message tools — correct endpoints |
 | `tools/purchases.test.js` | All 5 purchase/order tools — correct endpoints |
-| `tools/transactions.test.js` | All 6 transaction write tools — correct methods and paths |
+| `tools/transactions.test.js` | All 10 transaction write tools — correct methods and paths |
 | `tools/products.test.js` | Both product tools — correct endpoints |
 | `tools/custom-objects.test.js` | All 4 custom object operations — objectID injection, validation |
 | `tools/metadata.test.js` | Both metadata tools — parameter passthrough |

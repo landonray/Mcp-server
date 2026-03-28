@@ -532,6 +532,79 @@ const staticTools = [
     },
     module: 'transactions',
   },
+  {
+    name: 'process_transaction',
+    description: "Charge a contact's card on file to process a new transaction. Requires an offer with products and a payer_id referencing a credit card already saved on the contact's record. This tool does NOT accept new card details — only cards on file. Agents should confirm with the user before executing, as this charges real money.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        contact_id: { type: 'integer', description: 'Contact ID to charge.' },
+        payer_id: { type: 'integer', description: "ID of the credit card on file to charge. Use the contact's saved card ID." },
+        offer: {
+          type: 'object',
+          description: 'Offer data containing products and pricing. Structure: { products: [{ id: <product_id>, quantity: <qty>, ... }], ... }. Use list_products and get_product to find product IDs.',
+        },
+        gateway_id: { type: 'integer', description: 'Payment gateway ID. Required if the account has multiple gateways.' },
+        invoice_template: { type: 'integer', description: 'Invoice template ID. Use 0 to suppress invoice email, or 1 for default.' },
+        billing_address: {
+          type: 'object',
+          description: 'Billing address override.',
+          properties: {
+            address: { type: 'string' },
+            address2: { type: 'string' },
+            city: { type: 'string' },
+            state: { type: 'string' },
+            zip: { type: 'string' },
+            country: { type: 'string' },
+          },
+        },
+      },
+      required: ['contact_id', 'payer_id', 'offer'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'log_transaction',
+    description: "Record a transaction without processing any payment. Use this to log offline sales (cash, check, wire transfer) or to document transactions that were handled outside of Ontraport. No card is charged.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        contact_id: { type: 'integer', description: 'Contact ID to log the transaction for.' },
+        offer: {
+          type: 'object',
+          description: 'Offer data containing products and pricing. Structure: { products: [{ id: <product_id>, quantity: <qty>, ... }], ... }.',
+        },
+        invoice_template: { type: 'integer', description: 'Invoice template ID. Use 0 to suppress invoice email, or 1 for default.' },
+      },
+      required: ['contact_id', 'offer'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'get_order',
+    description: "Retrieve details of a specific order (subscription or payment plan) associated with a transaction. Returns the order schedule, next charge date, and payment details.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'Transaction ID to retrieve the order for.' },
+      },
+      required: ['id'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'update_order',
+    description: "Update an existing order (subscription or payment plan). Can modify the next charge date, payment amount, or other order fields.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'Transaction ID of the order to update.' },
+      },
+      required: ['id'],
+      additionalProperties: true,
+    },
+    module: 'transactions',
+  },
 
   // ── Products ──
   {
