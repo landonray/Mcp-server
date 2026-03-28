@@ -90,72 +90,82 @@ describe('Transaction tools', () => {
   });
 
   describe('process_transaction', () => {
-    it('posts to processManual with chargeNow=1 and payer as card ID', async () => {
+    it('posts with chargeNow string and cc_id', async () => {
       const client = mockClient();
       const offer = { products: [{ id: 1, quantity: 1 }] };
       await transactions.process_transaction(client, {
         contact_id: 27,
-        payer_id: 5,
+        cc_id: 5,
         offer,
         gateway_id: 1,
       });
       expect(client.post).toHaveBeenCalledWith('/transaction/processManual', {
         contact_id: 27,
-        chargeNow: 1,
+        chargeNow: 'chargeNow',
         offer,
-        payer: { id: 5 },
         gateway_id: 1,
+        invoice_template: 1,
+        cc_id: 5,
       });
     });
 
-    it('includes optional billing_address and invoice_template', async () => {
+    it('uses default card when cc_id omitted', async () => {
       const client = mockClient();
-      const offer = { products: [{ id: 1, quantity: 1 }] };
-      const billing = { address: '123 Main', city: 'Austin', state: 'TX', zip: '78701', country: 'US' };
       await transactions.process_transaction(client, {
         contact_id: 27,
-        payer_id: 5,
-        offer,
-        billing_address: billing,
-        invoice_template: 0,
+        offer: { products: [{ id: 1 }] },
+        gateway_id: 1,
       });
-      expect(client.post).toHaveBeenCalledWith('/transaction/processManual', {
+      const body = client.post.mock.calls[0][1];
+      expect(body.cc_id).toBeUndefined();
+      expect(body.chargeNow).toBe('chargeNow');
+    });
+
+    it('passes optional notes and trans_date', async () => {
+      const client = mockClient();
+      await transactions.process_transaction(client, {
         contact_id: 27,
-        chargeNow: 1,
-        offer,
-        payer: { id: 5 },
-        billing_address: billing,
-        invoice_template: 0,
+        offer: { products: [{ id: 1 }] },
+        gateway_id: 1,
+        trans_date: 1369820760000,
+        customer_note: 'Thanks',
+        internal_note: 'VIP',
+        external_order_id: 'EXT-123',
       });
+      const body = client.post.mock.calls[0][1];
+      expect(body.trans_date).toBe(1369820760000);
+      expect(body.customer_note).toBe('Thanks');
+      expect(body.internal_note).toBe('VIP');
+      expect(body.external_order_id).toBe('EXT-123');
     });
 
     it('throws if contact_id is missing', async () => {
       const client = mockClient();
-      await expect(transactions.process_transaction(client, { payer_id: 5, offer: {} }))
+      await expect(transactions.process_transaction(client, { cc_id: 5, offer: {}, gateway_id: 1 }))
         .rejects.toThrow('contact_id is required');
     });
 
-    it('throws if payer_id is missing', async () => {
+    it('throws if gateway_id is missing', async () => {
       const client = mockClient();
       await expect(transactions.process_transaction(client, { contact_id: 27, offer: {} }))
-        .rejects.toThrow('payer_id');
+        .rejects.toThrow('gateway_id is required');
     });
 
     it('throws if offer is missing', async () => {
       const client = mockClient();
-      await expect(transactions.process_transaction(client, { contact_id: 27, payer_id: 5 }))
+      await expect(transactions.process_transaction(client, { contact_id: 27, gateway_id: 1 }))
         .rejects.toThrow('offer is required');
     });
   });
 
   describe('log_transaction', () => {
-    it('posts to processManual with chargeNow=0', async () => {
+    it('posts with chargeLog string', async () => {
       const client = mockClient();
       const offer = { products: [{ id: 2, quantity: 3 }] };
       await transactions.log_transaction(client, { contact_id: 27, offer });
       expect(client.post).toHaveBeenCalledWith('/transaction/processManual', {
         contact_id: 27,
-        chargeNow: 0,
+        chargeNow: 'chargeLog',
         offer,
       });
     });
@@ -165,7 +175,7 @@ describe('Transaction tools', () => {
       await transactions.log_transaction(client, { contact_id: 27, offer: {}, invoice_template: 1 });
       expect(client.post).toHaveBeenCalledWith('/transaction/processManual', {
         contact_id: 27,
-        chargeNow: 0,
+        chargeNow: 'chargeLog',
         offer: {},
         invoice_template: 1,
       });

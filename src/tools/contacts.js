@@ -2,7 +2,9 @@ const { badRequest } = require('../errors');
 
 async function get_contact(client, params) {
   if (params.email) {
-    return client.get('/object/getByEmail', { objectID: 0, email: params.email });
+    const query = { objectID: 0, email: params.email };
+    if (params.all !== undefined) query.all = params.all;
+    return client.get('/object/getByEmail', query);
   }
   if (params.id !== undefined) {
     return client.get('/Contact', { id: params.id });
@@ -14,7 +16,9 @@ async function search_contacts(client, params) {
   const query = {};
   if (params.condition) query.condition = params.condition;
   if (params.search) query.search = params.search;
+  if (params.searchNotes !== undefined) query.searchNotes = params.searchNotes;
   if (params.listFields) query.listFields = params.listFields;
+  if (params.externs) query.externs = params.externs;
   if (params.sort) query.sort = params.sort;
   if (params.sortDir) query.sortDir = params.sortDir;
   if (params.start !== undefined) query.start = params.start;
