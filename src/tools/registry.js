@@ -64,6 +64,8 @@ const staticHandlers = {
   mark_transaction_paid: transactions.mark_transaction_paid,
   rerun_transaction: transactions.rerun_transaction,
   resend_invoice: transactions.resend_invoice,
+  cancel_subscription: transactions.cancel_subscription,
+  convert_to_collections: transactions.convert_to_collections,
   process_transaction: transactions.process_transaction,
   log_transaction: transactions.log_transaction,
   get_order: transactions.get_order,
