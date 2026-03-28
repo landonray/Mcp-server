@@ -11,11 +11,4 @@ async function get_message(client, params) {
   return client.get('/Message', { id: params.id });
 }
 
-async function send_message(client, params) {
-  return client.post('/message', {
-    contact_id: params.contact_id,
-    message_id: params.message_id,
-  });
-}
-
-module.exports = { get_messages, get_message, send_message };
+module.exports = { get_messages, get_message };
