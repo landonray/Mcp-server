@@ -11,8 +11,8 @@ function mockClient(metaResponse) {
 describe('Manifest Builder', () => {
   it('returns all static tools when no custom objects exist', async () => {
     const client = mockClient({ data: {} });
-    const manifest = await buildManifest(client);
-    expect(manifest.length).toBe(staticTools.length);
+    const { tools } = await buildManifest(client);
+    expect(tools.length).toBe(staticTools.length);
     expect(client.get).toHaveBeenCalledWith('/objects/meta');
   });
 
@@ -24,8 +24,8 @@ describe('Manifest Builder', () => {
       },
     });
 
-    const manifest = await buildManifest(client);
-    const customTools = manifest.filter(t => t.name.includes('Project'));
+    const { tools } = await buildManifest(client);
+    const customTools = tools.filter(t => t.name.includes('Project'));
     expect(customTools).toHaveLength(4);
     expect(customTools.map(t => t.name).sort()).toEqual([
       'create_Project',
@@ -35,20 +35,25 @@ describe('Manifest Builder', () => {
     ]);
   });
 
-  it('skips built-in object type IDs', async () => {
-    const metaData = {};
-    for (const id of BUILTIN_OBJECT_TYPE_IDS) {
-      metaData[String(id)] = { name: `BuiltIn_${id}` };
-    }
-    const client = mockClient({ data: metaData });
-    const manifest = await buildManifest(client);
-    expect(manifest.length).toBe(staticTools.length);
+  it('returns customObjectMap with safeName → typeId', async () => {
+    const client = mockClient({
+      data: {
+        '0': { name: 'Contact' },
+        '10000': { name: 'Project', last_modified: '1000' },
+        '10001': { name: 'My Widget', last_modified: '2000' },
+      },
+    });
+
+    const { customObjectMap } = await buildManifest(client);
+    expect(customObjectMap).toBeInstanceOf(Map);
+    expect(customObjectMap.get('Project')).toBe(10000);
+    expect(customObjectMap.get('My_Widget')).toBe(10001);
+    // Built-in objects should not be in the map
+    expect(customObjectMap.has('Contact')).toBe(false);
   });
 
-  it('enforces 100-tool cap and adds truncation note', async () => {
+  it('customObjectMap includes ALL custom objects even when truncated', async () => {
     const metaData = {};
-    // Generate enough custom objects to exceed the limit
-    // Each custom object generates 4 tools
     for (let i = 0; i < 30; i++) {
       metaData[String(10000 + i)] = {
         name: `CustomObj${i}`,
@@ -56,14 +61,36 @@ describe('Manifest Builder', () => {
       };
     }
     const client = mockClient({ data: metaData });
-    const manifest = await buildManifest(client);
+    const { customObjectMap } = await buildManifest(client);
+    // All 30 should be in the map even though manifest is truncated
+    expect(customObjectMap.size).toBe(30);
+  });
 
-    // Should not exceed MAX_MANIFEST_TOOLS + 1 (for the note)
-    const regularTools = manifest.filter(t => t.name !== '_manifest_note');
+  it('skips built-in object type IDs', async () => {
+    const metaData = {};
+    for (const id of BUILTIN_OBJECT_TYPE_IDS) {
+      metaData[String(id)] = { name: `BuiltIn_${id}` };
+    }
+    const client = mockClient({ data: metaData });
+    const { tools } = await buildManifest(client);
+    expect(tools.length).toBe(staticTools.length);
+  });
+
+  it('enforces 100-tool cap and adds truncation note', async () => {
+    const metaData = {};
+    for (let i = 0; i < 30; i++) {
+      metaData[String(10000 + i)] = {
+        name: `CustomObj${i}`,
+        last_modified: String(1000 + i),
+      };
+    }
+    const client = mockClient({ data: metaData });
+    const { tools } = await buildManifest(client);
+
+    const regularTools = tools.filter(t => t.name !== '_manifest_note');
     expect(regularTools.length).toBeLessThanOrEqual(MAX_MANIFEST_TOOLS);
 
-    // Should have the truncation note
-    const note = manifest.find(t => t.name === '_manifest_note');
+    const note = tools.find(t => t.name === '_manifest_note');
     expect(note).toBeDefined();
     expect(note.description).toContain('additional custom objects');
   });
@@ -77,10 +104,9 @@ describe('Manifest Builder', () => {
       };
     }
     const client = mockClient({ data: metaData });
-    const manifest = await buildManifest(client);
+    const { tools } = await buildManifest(client);
 
-    // Each included custom object should have exactly 4 tools
-    const customTools = manifest.filter(t =>
+    const customTools = tools.filter(t =>
       t.name !== '_manifest_note' &&
       !staticTools.some(st => st.name === t.name)
     );
@@ -93,8 +119,8 @@ describe('Manifest Builder', () => {
         '10000': { name: 'Widget', last_modified: '1000' },
       },
     });
-    const manifest = await buildManifest(client);
-    for (const tool of manifest) {
+    const { tools } = await buildManifest(client);
+    for (const tool of tools) {
       expect(tool._objectTypeId).toBeUndefined();
       expect(tool._objectName).toBeUndefined();
       expect(tool.module).toBeUndefined();
@@ -111,14 +137,10 @@ describe('Manifest Builder', () => {
       },
     });
 
-    const manifest = await buildManifest(client);
-    const customTools = manifest.filter(
-      t => t.name.includes('Older') || t.name.includes('Newer')
-    );
+    const { tools } = await buildManifest(client);
 
-    // Newer tools should appear before Older tools
-    const newerIdx = manifest.findIndex(t => t.name === 'get_Newer');
-    const olderIdx = manifest.findIndex(t => t.name === 'get_Older');
+    const newerIdx = tools.findIndex(t => t.name === 'get_Newer');
+    const olderIdx = tools.findIndex(t => t.name === 'get_Older');
     expect(newerIdx).toBeLessThan(olderIdx);
   });
 

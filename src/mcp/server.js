@@ -26,11 +26,16 @@ function createMcpServer(apiKey, appId) {
     },
   });
 
+  // Cache the custom object map from the most recent tools/list call.
+  // This avoids an extra /objects/meta round-trip on every tools/call.
+  let customObjectMap = new Map();
+
   // tools/list — build dynamic manifest from Ontraport account metadata
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const client = new OntraportClient(apiKey, appId);
-    const tools = await buildManifest(client);
-    return { tools };
+    const result = await buildManifest(client);
+    customObjectMap = result.customObjectMap;
+    return { tools: result.tools };
   });
 
   // tools/call — dispatch to the appropriate tool handler
@@ -38,7 +43,7 @@ function createMcpServer(apiKey, appId) {
     const { name, arguments: args } = request.params;
     const client = new OntraportClient(apiKey, appId);
 
-    const handler = await getHandler(name, client);
+    const handler = getHandler(name, customObjectMap);
 
     if (!handler) {
       return {
