@@ -26,6 +26,14 @@ async function resend_invoice(client, params) {
   return client.post('/transaction/resendInvoice', { ids: params.ids });
 }
 
+async function cancel_subscription(client, params) {
+  return client.put('/transaction/convertToDecline', { ids: params.ids });
+}
+
+async function convert_to_collections(client, params) {
+  return client.put('/transaction/convertToCollections', { ids: params.ids });
+}
+
 async function process_transaction(client, params) {
   if (!params.contact_id) {
     throw badRequest('contact_id is required for process_transaction.');
@@ -89,6 +97,8 @@ module.exports = {
   mark_transaction_paid,
   rerun_transaction,
   resend_invoice,
+  cancel_subscription,
+  convert_to_collections,
   process_transaction,
   log_transaction,
   get_order,

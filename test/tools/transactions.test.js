@@ -51,6 +51,18 @@ describe('Transaction tools', () => {
     expect(client.post).toHaveBeenCalledWith('/transaction/resendInvoice', { ids: [1, 2] });
   });
 
+  it('cancel_subscription converts to declined', async () => {
+    const client = mockClient();
+    await transactions.cancel_subscription(client, { ids: [10, 11] });
+    expect(client.put).toHaveBeenCalledWith('/transaction/convertToDecline', { ids: [10, 11] });
+  });
+
+  it('convert_to_collections', async () => {
+    const client = mockClient();
+    await transactions.convert_to_collections(client, { ids: [10] });
+    expect(client.put).toHaveBeenCalledWith('/transaction/convertToCollections', { ids: [10] });
+  });
+
   describe('process_transaction', () => {
     it('posts to processManual with chargeNow=1 and payer as card ID', async () => {
       const client = mockClient();

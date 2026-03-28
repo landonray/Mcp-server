@@ -533,6 +533,30 @@ const staticTools = [
     module: 'transactions',
   },
   {
+    name: 'cancel_subscription',
+    description: "Cancel one or more active subscriptions by converting their transactions to declined status. This stops all future recurring charges. The associated open orders will no longer be billed. This cannot be undone — to restart billing, a new transaction must be created.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of transaction IDs whose subscriptions should be cancelled.' },
+      },
+      required: ['ids'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'convert_to_collections',
+    description: "Convert one or more transactions to collections status. Use this for overdue subscriptions or payment plans that should be escalated to collections. This stops normal recurring billing and marks the transactions for collection follow-up.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of transaction IDs to convert to collections.' },
+      },
+      required: ['ids'],
+    },
+    module: 'transactions',
+  },
+  {
     name: 'process_transaction',
     description: "Charge a contact's card on file to process a new transaction. Supports one-time purchases, subscriptions (recurring billing), payment plans (installments), and trial periods. Requires an offer with products and a payer_id referencing a credit card already saved on the contact's record. This tool does NOT accept new card details — only cards on file. When the offer includes a subscription or payment plan, Ontraport charges the first payment and automatically creates open orders for future charges. Agents should confirm with the user before executing, as this charges real money.",
     inputSchema: {
@@ -542,7 +566,7 @@ const staticTools = [
         payer_id: { type: 'integer', description: "ID of the credit card on file to charge. Use the contact's saved card ID." },
         offer: {
           type: 'object',
-          description: 'Offer data containing products and optional recurring billing. Structure: { products: [{ id: <product_id>, quantity: <qty> }], subscriptions: [{ product_id, price, unit: "month"|"week"|"year", frequency: <n> }], paymentPlans: [{ product_id, num_payments, unit, frequency }], trials: [{ product_id, days, price }] }. Use list_products to find product IDs. Subscriptions and payment plans cannot coexist on the same product.',
+          description: 'Offer data with products, pricing, and optional recurring/tax/shipping config. Structure: { name: "Offer Name", products: [{ id: <product_id>, quantity: <qty>, shipping: true/false, tax: true/false }], subscriptions: [{ product_id, price, payment_count: 1, unit: "month"|"week"|"day"|"quarter"|"year" }], paymentPlans: [{ product_id, price, payment_count: <n>, unit }], trials: [{ product_id, price: 0, payment_count: <n>, unit }], taxes: [{ id: <tax_id>, rate: <percent>, name: "Tax", taxShipping: true/false }], shipping: { id: <shipping_id>, price: <amount>, name: "Shipping" }, shipping_charge_reoccurring_orders: true/false, invoice_template: 1 }. Use list_products to find product IDs. Subscriptions and payment plans cannot coexist on the same product. A trial precedes the subscription/plan and charges a reduced (or zero) price for the trial period.',
         },
         gateway_id: { type: 'integer', description: 'Payment gateway ID. Required if the account has multiple gateways.' },
         invoice_template: { type: 'integer', description: 'Invoice template ID. Use 0 to suppress invoice email, or 1 for default.' },
@@ -572,7 +596,7 @@ const staticTools = [
         contact_id: { type: 'integer', description: 'Contact ID to log the transaction for.' },
         offer: {
           type: 'object',
-          description: 'Offer data containing products and optional recurring billing. Same structure as process_transaction: { products: [...], subscriptions: [...], paymentPlans: [...], trials: [...] }.',
+          description: 'Offer data — same structure as process_transaction. Supports products, subscriptions, payment plans, trials, taxes, and shipping.',
         },
         invoice_template: { type: 'integer', description: 'Invoice template ID. Use 0 to suppress invoice email, or 1 for default.' },
       },
