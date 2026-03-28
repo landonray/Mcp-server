@@ -100,10 +100,16 @@ async function get_order(client, params) {
 }
 
 async function update_order(client, params) {
-  if (params.id === undefined) {
-    throw badRequest('id is required for update_order.');
+  if (!params.offer) {
+    throw badRequest('offer is required for update_order. WARNING: omitting offer data deletes the order.');
   }
-  return client.put('/transaction/order', params);
+  if (!params.offer.order_id) {
+    throw badRequest('offer.order_id is required for update_order.');
+  }
+  if (!params.offer.offer_id) {
+    throw badRequest('offer.offer_id is required for update_order.');
+  }
+  return client.put('/transaction/order', { offer: params.offer });
 }
 
 module.exports = {
