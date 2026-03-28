@@ -70,6 +70,8 @@ const staticHandlers = {
   convert_to_collections: transactions.convert_to_collections,
   process_transaction: transactions.process_transaction,
   log_transaction: transactions.log_transaction,
+  create_invoice: transactions.create_invoice,
+  pay_invoice: transactions.pay_invoice,
   get_order: transactions.get_order,
   update_order: transactions.update_order,
 
