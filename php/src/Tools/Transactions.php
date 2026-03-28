@@ -86,7 +86,11 @@ class Transactions
             'invoice_template' => $params['invoice_template'] ?? 1,
         ];
 
-        if (isset($params['cc_id'])) $body['cc_id'] = $params['cc_id'];
+        if (isset($params['cc_id'])) {
+            $body['cc_id'] = $params['cc_id'];
+        } elseif (isset($params['payer_id'])) {
+            $body['cc_id'] = $params['payer_id'];
+        }
         if (isset($params['billing_address'])) $body['billing_address'] = $params['billing_address'];
         if (isset($params['trans_date'])) $body['trans_date'] = $params['trans_date'];
         if (isset($params['external_order_id'])) $body['external_order_id'] = $params['external_order_id'];
