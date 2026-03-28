@@ -1,0 +1,606 @@
+// Single source-of-truth for all static tool definitions.
+// Each tool: { name, description, inputSchema, handler (module key) }
+
+const paginationProperties = {
+  start: { type: 'integer', description: 'Zero-based offset to begin results from. Default 0.' },
+  range: { type: 'integer', description: 'Number of records to return. Maximum and default is 50.', maximum: 50 },
+  sort: { type: 'string', description: 'Field name to sort results by.' },
+  sortDir: { type: 'string', enum: ['asc', 'desc'], description: "Sort direction: 'asc' or 'desc'." },
+};
+
+const conditionProperty = {
+  condition: {
+    type: 'string',
+    description: "JSON-encoded array of criteria objects for filtering. Example: [{\"field\":{\"field\":\"lastname\"},\"op\":\"=\",\"value\":{\"value\":\"Smith\"}}]. Join multiple with 'AND' or 'OR'.",
+  },
+};
+
+const searchProperty = {
+  search: { type: 'string', description: 'Free-text search across all fields.' },
+};
+
+const staticTools = [
+  // ── Contacts ──
+  {
+    name: 'get_contact',
+    description: "Retrieve a single contact record by ID or email address. Returns all standard and custom fields for the contact. Use this when you have a specific contact to look up.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'The contact ID to retrieve.' },
+        email: { type: 'string', description: 'The email address to look up.' },
+      },
+    },
+    module: 'contacts',
+  },
+  {
+    name: 'search_contacts',
+    description: "Search for contacts matching specific criteria. Supports field-value conditions (e.g., last name equals 'Smith'), tag filters, and free-text search across all fields. Results are paginated with a maximum of 50 per request. Use get_contact_count first if you need to know total results before paginating.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        ...searchProperty,
+        listFields: { type: 'string', description: 'Comma-separated field names to include in results.' },
+        ...paginationProperties,
+      },
+    },
+    module: 'contacts',
+  },
+  {
+    name: 'create_contact',
+    description: "Create a new contact record. This allows duplicate emails — if you want to avoid duplicates, use merge_or_create_contact instead. Returns the full contact record including the new ID.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', description: 'Email address (recommended).' },
+        firstname: { type: 'string', description: 'First name.' },
+        lastname: { type: 'string', description: 'Last name.' },
+      },
+      additionalProperties: true,
+    },
+    module: 'contacts',
+  },
+  {
+    name: 'merge_or_create_contact',
+    description: "Look up a contact by email. If one exists, update it with the supplied fields. If none exists, create a new contact. This is the safest tool for agent use cases where you don't know if a contact already exists. Uses email as the unique matching key.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', description: 'Email address used as the unique matching key.' },
+        ignore_blanks: { type: 'boolean', description: "When true, empty strings won't overwrite existing values." },
+      },
+      required: ['email'],
+      additionalProperties: true,
+    },
+    module: 'contacts',
+  },
+  {
+    name: 'update_contact',
+    description: "Update one or more fields on an existing contact. You must know the contact's ID. Only the fields you include will be changed; all other fields remain untouched.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'The contact ID to update.' },
+      },
+      required: ['id'],
+      additionalProperties: true,
+    },
+    module: 'contacts',
+  },
+  {
+    name: 'delete_contact',
+    description: "Permanently delete a single contact record. This cannot be undone. The contact is removed from all sequences, campaigns, and tags.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'The contact ID to delete.' },
+      },
+      required: ['id'],
+    },
+    module: 'contacts',
+  },
+  {
+    name: 'get_contact_count',
+    description: "Retrieve the total number of contacts matching optional criteria without returning the contacts themselves. Use this before paginating search_contacts to know how many pages to expect.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        ...searchProperty,
+      },
+    },
+    module: 'contacts',
+  },
+
+  // ── Tags ──
+  {
+    name: 'add_tag_by_name',
+    description: "Apply one or more tags to one or more contacts by tag name. If a tag with that name doesn't exist yet, it will be created automatically. This is the preferred tagging tool because agents typically know tag names, not IDs.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of contact IDs to tag.' },
+        add_names: { type: 'array', items: { type: 'string' }, description: 'Array of tag name strings to apply.' },
+      },
+      required: ['ids', 'add_names'],
+    },
+    module: 'tags',
+  },
+  {
+    name: 'remove_tag_by_name',
+    description: "Remove one or more tags from one or more contacts by tag name. If the tag name doesn't exist, it is silently ignored — no error is returned.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of contact IDs.' },
+        remove_names: { type: 'array', items: { type: 'string' }, description: 'Array of tag name strings to remove.' },
+      },
+      required: ['ids', 'remove_names'],
+    },
+    module: 'tags',
+  },
+  {
+    name: 'add_tag_by_id',
+    description: "Apply one or more tags to one or more contacts by tag ID. Use this only when you already have the tag ID.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'string', description: 'Comma-separated contact IDs.' },
+        add_list: { type: 'string', description: 'Comma-separated tag IDs to apply.' },
+      },
+      required: ['ids', 'add_list'],
+    },
+    module: 'tags',
+  },
+  {
+    name: 'remove_tag_by_id',
+    description: "Remove one or more tags from one or more contacts by tag ID.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'string', description: 'Comma-separated contact IDs.' },
+        remove_list: { type: 'string', description: 'Comma-separated tag IDs to remove.' },
+      },
+      required: ['ids', 'remove_list'],
+    },
+    module: 'tags',
+  },
+  {
+    name: 'get_contacts_by_tag',
+    description: "Retrieve all contacts that have a specific tag applied. Supports filtering by tag name or tag ID. Results are paginated.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tag_name: { type: 'string', description: 'Tag name to filter by.' },
+        tag_id: { type: 'integer', description: 'Tag ID to filter by.' },
+        listFields: { type: 'string', description: 'Comma-separated field names to include.' },
+        start: paginationProperties.start,
+        range: paginationProperties.range,
+      },
+    },
+    module: 'tags',
+  },
+  {
+    name: 'list_tags',
+    description: "Retrieve the full list of tags defined in the account. Use this to look up tag IDs or verify tag names before applying them.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...paginationProperties,
+      },
+    },
+    module: 'tags',
+  },
+
+  // ── Sequences & Campaigns ──
+  {
+    name: 'subscribe_to_sequence',
+    description: "Enroll one or more contacts in one or more sequences or campaigns (automations). Specify sub_type to indicate whether you're subscribing to a Sequence or a Campaign.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'string', description: 'Comma-separated contact IDs.' },
+        add_list: { type: 'string', description: 'Comma-separated sequence/campaign IDs.' },
+        sub_type: { type: 'string', enum: ['Sequence', 'Campaign'], description: "Type: 'Sequence' or 'Campaign'. Defaults to 'Campaign'." },
+      },
+      required: ['ids', 'add_list'],
+    },
+    module: 'sequences',
+  },
+  {
+    name: 'unsubscribe_from_sequence',
+    description: "Remove one or more contacts from one or more sequences or campaigns. The contact will stop receiving steps from the specified sequence/campaign.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'string', description: 'Comma-separated contact IDs.' },
+        remove_list: { type: 'string', description: 'Comma-separated sequence/campaign IDs.' },
+        sub_type: { type: 'string', enum: ['Sequence', 'Campaign'], description: "Type: 'Sequence' or 'Campaign'. Defaults to 'Campaign'." },
+      },
+      required: ['ids', 'remove_list'],
+    },
+    module: 'sequences',
+  },
+  {
+    name: 'pause_rules_and_sequences',
+    description: "Pause all rules, sequences, and sequence subscribers for a contact. While paused, no automated actions will fire for this contact.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'string', description: 'Comma-separated object IDs.' },
+        objectID: { type: 'integer', description: 'Object type ID (use 0 for contacts).' },
+      },
+      required: ['ids', 'objectID'],
+    },
+    module: 'sequences',
+  },
+  {
+    name: 'unpause_rules_and_sequences',
+    description: "Resume all previously paused rules, sequences, and sequence subscribers for a contact.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'string', description: 'Comma-separated object IDs.' },
+        objectID: { type: 'integer', description: 'Object type ID (use 0 for contacts).' },
+      },
+      required: ['ids', 'objectID'],
+    },
+    module: 'sequences',
+  },
+
+  // ── Tasks ──
+  {
+    name: 'assign_task',
+    description: "Create and assign a task to one or more contacts. Requires a task message ID (the template for the task) and supports setting due date and assignee.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        object_type_id: { type: 'integer', description: 'Object type ID (0 for contacts).' },
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of contact IDs.' },
+        message: {
+          type: 'object',
+          description: 'Task message configuration.',
+          properties: {
+            id: { type: 'integer', description: 'Task message template ID.' },
+            due_date: { type: 'integer', description: 'Due date as Unix timestamp.' },
+            task_owner: { type: 'integer', description: 'User ID of the task assignee.' },
+          },
+          required: ['id'],
+        },
+      },
+      required: ['object_type_id', 'ids', 'message'],
+    },
+    module: 'tasks',
+  },
+  {
+    name: 'complete_task',
+    description: "Mark one or more tasks as completed. Optionally include a task outcome and followup task data.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        object_type_id: { type: 'integer', description: 'Object type ID (0 for contacts).' },
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of task IDs.' },
+        data: {
+          type: 'object',
+          description: 'Optional outcome data.',
+          properties: {
+            outcome: { type: 'string', description: "Task outcome (prefix with ':=')." },
+          },
+        },
+      },
+      required: ['object_type_id', 'ids'],
+    },
+    module: 'tasks',
+  },
+  {
+    name: 'cancel_task',
+    description: "Cancel one or more tasks. Cancelled tasks remain in the system with status 2 but are no longer actionable.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectID: { type: 'integer', description: 'Object type ID.' },
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of task IDs.' },
+      },
+      required: ['objectID', 'ids'],
+    },
+    module: 'tasks',
+  },
+  {
+    name: 'update_task',
+    description: "Update a task's assignee, due date, or status. Requires the task ID.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'Task ID.' },
+        owner: { type: 'integer', description: 'New task assignee user ID.' },
+        date_due: { type: 'integer', description: 'New due date as Unix timestamp.' },
+        status: { type: 'integer', enum: [0, 1, 2], description: 'Status: 0=Pending, 1=Complete, 2=Cancelled.' },
+      },
+      required: ['id'],
+    },
+    module: 'tasks',
+  },
+  {
+    name: 'get_tasks',
+    description: "Retrieve tasks, optionally filtered by criteria. Results are paginated.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        ...paginationProperties,
+      },
+    },
+    module: 'tasks',
+  },
+
+  // ── Notes ──
+  {
+    name: 'create_note',
+    description: "Create a note attached to a contact record. Notes are visible on the contact's record in the Ontraport UI.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        contact_id: { type: 'integer', description: 'Contact ID to attach the note to.' },
+        data: { type: 'string', description: 'The note text.' },
+        owner: { type: 'integer', description: 'Owner user ID (optional).' },
+      },
+      required: ['contact_id', 'data'],
+    },
+    module: 'notes',
+  },
+  {
+    name: 'get_notes',
+    description: "Retrieve notes, optionally filtered by contact ID or other criteria.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        start: paginationProperties.start,
+        range: paginationProperties.range,
+      },
+    },
+    module: 'notes',
+  },
+
+  // ── Messages ──
+  {
+    name: 'get_messages',
+    description: "Retrieve the list of available email, SMS, and task messages in the account. Use this to find a message ID before sending.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        listFields: { type: 'string', description: 'Comma-separated field names to include.' },
+        start: paginationProperties.start,
+        range: paginationProperties.range,
+      },
+    },
+    module: 'messages',
+  },
+  {
+    name: 'get_message',
+    description: "Retrieve a single message by ID, including its full content, subject line, and metadata.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'Message ID.' },
+      },
+      required: ['id'],
+    },
+    module: 'messages',
+  },
+  {
+    name: 'send_message',
+    description: "Send a specific pre-built message (email or SMS) to a single contact. The message must already exist in the account — this tool triggers delivery, not creation.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        contact_id: { type: 'integer', description: 'Contact ID to send to.' },
+        message_id: { type: 'integer', description: 'Message template ID to send.' },
+      },
+      required: ['contact_id', 'message_id'],
+    },
+    module: 'messages',
+  },
+
+  // ── Purchases & Orders (Read) ──
+  {
+    name: 'get_purchases',
+    description: "Retrieve purchase records for a contact. Each completed product sale creates a purchase record. Use condition to filter by contact_id.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        listFields: { type: 'string', description: 'Comma-separated field names.' },
+        start: paginationProperties.start,
+        range: paginationProperties.range,
+      },
+    },
+    module: 'purchases',
+  },
+  {
+    name: 'get_purchase_logs',
+    description: "Retrieve detailed purchase history logs showing the lifecycle of individual purchases (created, paid, refunded, etc.).",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        start: paginationProperties.start,
+        range: paginationProperties.range,
+      },
+    },
+    module: 'purchases',
+  },
+  {
+    name: 'get_transactions',
+    description: "Retrieve transaction (invoice) records. Transactions contain the financial details of a sale including totals, tax, shipping, payment status, and the associated offer data.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        listFields: { type: 'string', description: 'Comma-separated field names.' },
+        ...paginationProperties,
+      },
+    },
+    module: 'purchases',
+  },
+  {
+    name: 'get_orders',
+    description: "Retrieve order records. An order represents a future or recurring transaction (subscriptions, payment plans). Each order tracks the payment schedule, next charge date, and remaining payments.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        start: paginationProperties.start,
+        range: paginationProperties.range,
+      },
+    },
+    module: 'purchases',
+  },
+  {
+    name: 'get_open_orders',
+    description: "Retrieve open order (active subscription) records. Open orders represent future payments that haven't been charged yet. Each tracks billing status, next payment date, and amounts.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...conditionProperty,
+        start: paginationProperties.start,
+        range: paginationProperties.range,
+      },
+    },
+    module: 'purchases',
+  },
+
+  // ── Transactions (Write) ──
+  {
+    name: 'refund_transaction',
+    description: "Refund one or more previously charged transactions. The refund is processed through the original payment gateway. This action cannot be undone.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of transaction IDs to refund.' },
+      },
+      required: ['ids'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'void_transaction',
+    description: "Void one or more previously charged transactions. Voiding differs from refunding — a void cancels a transaction that hasn't settled yet, while a refund reverses a settled charge.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of transaction IDs to void.' },
+      },
+      required: ['ids'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'write_off_transaction',
+    description: "Write off one or more unpaid transactions. Use this for transactions that will not be collected (e.g., bad debt).",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of transaction IDs to write off.' },
+      },
+      required: ['ids'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'mark_transaction_paid',
+    description: "Mark a transaction as manually paid. Use when payment was received outside of the payment gateway (e.g., check, cash, wire transfer).",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'Transaction ID.' },
+        type: { type: 'integer', enum: [0, 1, 2, 3, 4], description: 'Payment type: 0=Card, 1=ACH, 2=Card Offline, 3=Check, 4=Other.' },
+      },
+      required: ['id'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'rerun_transaction',
+    description: "Retry a previously declined or failed transaction. The charge is re-attempted against the contact's card on file.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of transaction IDs to retry.' },
+      },
+      required: ['ids'],
+    },
+    module: 'transactions',
+  },
+  {
+    name: 'resend_invoice',
+    description: "Resend an invoice email for a previously charged transaction.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'integer' }, description: 'Array of transaction IDs to resend invoices for.' },
+      },
+      required: ['ids'],
+    },
+    module: 'transactions',
+  },
+
+  // ── Products ──
+  {
+    name: 'list_products',
+    description: "Retrieve all products defined in the account. Products are used in transactions, offers, and order forms.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        listFields: { type: 'string', description: 'Comma-separated field names.' },
+        start: paginationProperties.start,
+        range: paginationProperties.range,
+      },
+    },
+    module: 'products',
+  },
+  {
+    name: 'get_product',
+    description: "Retrieve a single product by ID, including price, description, SKU, and sales totals.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'Product ID.' },
+      },
+      required: ['id'],
+    },
+    module: 'products',
+  },
+
+  // ── Metadata & Discovery ──
+  {
+    name: 'get_object_meta',
+    description: "Retrieve field definitions for any object type. Returns field names, types, required/unique flags, and dropdown options. Essential for agents to discover what fields exist on an object before creating or searching records.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectID: { type: 'integer', description: 'Object type ID. Omit to get all objects.' },
+        format: { type: 'string', enum: ['byId', 'byName'], description: "Response format: 'byId' or 'byName'. Default 'byName'." },
+      },
+    },
+    module: 'metadata',
+  },
+  {
+    name: 'get_collection_count',
+    description: "Retrieve the count of records in any object collection matching optional criteria. Use this for pagination planning or dashboard-style counts.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectID: { type: 'integer', description: 'Object type ID.' },
+        ...conditionProperty,
+        ...searchProperty,
+      },
+      required: ['objectID'],
+    },
+    module: 'metadata',
+  },
+];
+
+module.exports = { staticTools };
