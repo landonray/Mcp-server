@@ -121,22 +121,19 @@ describe('Transaction tools', () => {
       expect(body.chargeNow).toBe('chargeNow');
     });
 
-    it('passes optional notes and trans_date', async () => {
+    it('passes optional trans_date and external_order_id', async () => {
       const client = mockClient();
       await transactions.process_transaction(client, {
         contact_id: 27,
         offer: { products: [{ id: 1 }] },
         gateway_id: 1,
         trans_date: 1369820760000,
-        customer_note: 'Thanks',
-        internal_note: 'VIP',
         external_order_id: 'EXT-123',
       });
       const body = client.post.mock.calls[0][1];
       expect(body.trans_date).toBe(1369820760000);
-      expect(body.customer_note).toBe('Thanks');
-      expect(body.internal_note).toBe('VIP');
       expect(body.external_order_id).toBe('EXT-123');
+      expect(body.customer_note).toBeUndefined();
     });
 
     it('throws if contact_id is missing', async () => {
@@ -228,6 +225,67 @@ describe('Transaction tools', () => {
     it('throws if offer.offer_id is missing', async () => {
       const client = mockClient();
       await expect(transactions.update_order(client, { offer: { order_id: 1 } })).rejects.toThrow('offer_id');
+    });
+  });
+
+  describe('create_invoice', () => {
+    it('posts to requestPayment with chargeNow=requestPayment', async () => {
+      const client = mockClient();
+      await transactions.create_invoice(client, {
+        contact_id: 27,
+        gateway_id: 1,
+        offer: { products: [{ id: 1, quantity: 1 }] },
+        send_invoice: true,
+        customer_note: 'Please pay',
+        internal_note: 'VIP client',
+        due_on: 15,
+      });
+      expect(client.post).toHaveBeenCalledWith('/transaction/requestPayment', {
+        contact_id: 27,
+        chargeNow: 'requestPayment',
+        gateway_id: 1,
+        offer: { products: [{ id: 1, quantity: 1 }] },
+        send_invoice: true,
+        customer_note: 'Please pay',
+        internal_note: 'VIP client',
+        due_on: 15,
+      });
+    });
+
+    it('throws if contact_id is missing', async () => {
+      const client = mockClient();
+      await expect(transactions.create_invoice(client, { gateway_id: 1, offer: {} }))
+        .rejects.toThrow('contact_id');
+    });
+
+    it('throws if gateway_id is missing', async () => {
+      const client = mockClient();
+      await expect(transactions.create_invoice(client, { contact_id: 1, offer: {} }))
+        .rejects.toThrow('gateway_id');
+    });
+  });
+
+  describe('pay_invoice', () => {
+    it('posts to payInvoice with invoice_id and cc_id', async () => {
+      const client = mockClient();
+      await transactions.pay_invoice(client, { invoice_id: 3, cc_id: 1 });
+      expect(client.post).toHaveBeenCalledWith('/transaction/payInvoice', {
+        invoice_id: 3,
+        cc_id: 1,
+      });
+    });
+
+    it('uses default card when cc_id omitted', async () => {
+      const client = mockClient();
+      await transactions.pay_invoice(client, { invoice_id: 3 });
+      expect(client.post).toHaveBeenCalledWith('/transaction/payInvoice', {
+        invoice_id: 3,
+      });
+    });
+
+    it('throws if invoice_id is missing', async () => {
+      const client = mockClient();
+      await expect(transactions.pay_invoice(client, {})).rejects.toThrow('invoice_id');
     });
   });
 });

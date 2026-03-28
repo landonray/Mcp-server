@@ -79,8 +79,6 @@ async function process_transaction(client, params) {
   if (params.billing_address) body.billing_address = params.billing_address;
   if (params.trans_date !== undefined) body.trans_date = params.trans_date;
   if (params.external_order_id) body.external_order_id = params.external_order_id;
-  if (params.customer_note) body.customer_note = params.customer_note;
-  if (params.internal_note) body.internal_note = params.internal_note;
 
   return client.post('/transaction/processManual', body);
 }
@@ -101,10 +99,47 @@ async function log_transaction(client, params) {
   if (params.invoice_template !== undefined) body.invoice_template = params.invoice_template;
   if (params.trans_date !== undefined) body.trans_date = params.trans_date;
   if (params.external_order_id) body.external_order_id = params.external_order_id;
-  if (params.customer_note) body.customer_note = params.customer_note;
-  if (params.internal_note) body.internal_note = params.internal_note;
 
   return client.post('/transaction/processManual', body);
+}
+
+async function create_invoice(client, params) {
+  if (!params.contact_id) {
+    throw badRequest('contact_id is required for create_invoice.');
+  }
+  if (!params.gateway_id) {
+    throw badRequest('gateway_id is required for create_invoice.');
+  }
+  if (!params.offer) {
+    throw badRequest('offer is required for create_invoice.');
+  }
+
+  const body = {
+    contact_id: params.contact_id,
+    chargeNow: 'requestPayment',
+    gateway_id: params.gateway_id,
+    offer: params.offer,
+  };
+  if (params.send_invoice !== undefined) body.send_invoice = params.send_invoice;
+  if (params.trans_date !== undefined) body.trans_date = params.trans_date;
+  if (params.due_on !== undefined) body.due_on = params.due_on;
+  if (params.customer_note) body.customer_note = params.customer_note;
+  if (params.internal_note) body.internal_note = params.internal_note;
+  if (params.to_field) body.to_field = params.to_field;
+  if (params.from_fields) body.from_fields = params.from_fields;
+
+  return client.post('/transaction/requestPayment', body);
+}
+
+async function pay_invoice(client, params) {
+  if (!params.invoice_id) {
+    throw badRequest('invoice_id is required for pay_invoice.');
+  }
+
+  const body = { invoice_id: params.invoice_id };
+  if (params.cc_id !== undefined) body.cc_id = params.cc_id;
+
+  return client.post('/transaction/payInvoice', body);
 }
 
 async function get_order(client, params) {
@@ -139,6 +174,8 @@ module.exports = {
   convert_to_collections,
   process_transaction,
   log_transaction,
+  create_invoice,
+  pay_invoice,
   get_order,
   update_order,
 };
