@@ -198,15 +198,26 @@ describe('Transaction tools', () => {
   });
 
   describe('update_order', () => {
-    it('puts order update with id and fields', async () => {
+    it('puts order update with full offer data', async () => {
       const client = mockClient();
-      await transactions.update_order(client, { id: 10, next_charge_date: 1700000000 });
-      expect(client.put).toHaveBeenCalledWith('/transaction/order', { id: 10, next_charge_date: 1700000000 });
+      const offer = { offer_id: 8, order_id: 1, products: [{ id: 1, price: [{ price: 10, id: 1 }] }] };
+      await transactions.update_order(client, { offer });
+      expect(client.put).toHaveBeenCalledWith('/transaction/order', { offer });
     });
 
-    it('throws if id is missing', async () => {
+    it('throws if offer is missing', async () => {
       const client = mockClient();
-      await expect(transactions.update_order(client, {})).rejects.toThrow('id is required');
+      await expect(transactions.update_order(client, {})).rejects.toThrow('offer is required');
+    });
+
+    it('throws if offer.order_id is missing', async () => {
+      const client = mockClient();
+      await expect(transactions.update_order(client, { offer: { offer_id: 1 } })).rejects.toThrow('order_id');
+    });
+
+    it('throws if offer.offer_id is missing', async () => {
+      const client = mockClient();
+      await expect(transactions.update_order(client, { offer: { order_id: 1 } })).rejects.toThrow('offer_id');
     });
   });
 });

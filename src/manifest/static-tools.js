@@ -446,7 +446,7 @@ const staticTools = [
   },
   {
     name: 'get_open_orders',
-    description: "Retrieve open order (active subscription) records. Open orders represent future payments that haven't been charged yet. Each tracks billing status, next payment date, and amounts.",
+    description: "Retrieve open order (active subscription/recurring payment) records. Open orders represent individual future charges that haven't been billed yet. Read-only — cannot be modified or deleted directly. Key fields: payment_next_date (Unix timestamp), payment_amount (per-payment price), payment_remaining (0 for subscriptions, >0 for payment plans), payment_made (payments completed so far), billing_status ('current' or 'past_due'), type (0=subscription, 1=payment plan, 2=setup fee), unit (day/week/month/quarter/year), order_id (links to the parent order record), contact_id. To cancel, use cancel_subscription to delete the parent order.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -618,7 +618,7 @@ const staticTools = [
   },
   {
     name: 'get_order',
-    description: "Retrieve details of a specific order (subscription or payment plan) associated with a transaction. Returns the order schedule, next charge date, and payment details.",
+    description: "Retrieve details of a specific order (subscription or payment plan schedule). Returns: payment_next_date (Unix timestamp of next charge), unit (day/week/month/quarter/year), count (units between payments), cc_id (card on file ID), offer_id (needed for update_order), next_sub (subtotal), next_charge (total with tax/shipping), transactions_remaining (0 for subscriptions, >0 for payment plans), status (0=current, 1=past due), and shipping address fields.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -630,14 +630,16 @@ const staticTools = [
   },
   {
     name: 'update_order',
-    description: "Update an existing order (subscription or payment plan). Can modify the next charge date, payment amount, or other order fields.",
+    description: "Update an existing order's payment schedule. WARNING: You must include the full offer data — if offer data is omitted, the order will be deleted. The safest workflow is: (1) use get_order to get the order's offer_id, (2) use get_object_meta with objectID=65 to understand the offer structure, (3) retrieve the offer via GET /object with objectID=65 and the offer_id, (4) modify the offer data as needed, (5) pass the modified offer back with offer_id and order_id included. Can be used to change the price, billing cycle, credit card (cc_id), gateway, or product.",
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'integer', description: 'Transaction ID of the order to update.' },
+        offer: {
+          type: 'object',
+          description: "The full offer data for the order. Must include offer_id (integer), order_id (integer), and products array. Can include cc_id (integer, to change card on file), gateway_id, taxes, shipping, delay, subTotal, grandTotal, hasTaxes, hasShipping, shipping_charge_recurring_orders. Each product needs: id, name, quantity, type ('single'|'subscription'|'payment_plan'), price (array of {price, payment_count, unit, id}), shipping (bool), tax (bool). Retrieve the current offer first and modify it rather than building from scratch.",
+        },
       },
-      required: ['id'],
-      additionalProperties: true,
+      required: ['offer'],
     },
     module: 'transactions',
   },
