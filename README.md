@@ -23,7 +23,7 @@ The server is a **translation layer**. It receives tool calls from AI agents, au
   - [Sequences & Campaigns (4 tools)](#sequences--campaigns-4-tools)
   - [Tasks (5 tools)](#tasks-5-tools)
   - [Notes (2 tools)](#notes-2-tools)
-  - [Messages (3 tools)](#messages-3-tools)
+  - [Messages (2 tools)](#messages-2-tools)
   - [Purchases & Orders (5 tools)](#purchases--orders-5-tools)
   - [Transactions Write (6 tools)](#transactions-write-6-tools)
   - [Products (2 tools)](#products-2-tools)
@@ -171,7 +171,7 @@ When an agent calls `tools/list`, the server:
 1. Calls `GET /objects/meta` on the Ontraport API using the agent's credentials
 2. Identifies custom objects (anything not in the built-in object type ID list)
 3. Generates 4 tool definitions per custom object (`get_`, `create_`, `update_`, `search_`)
-4. Merges the 42 static tools with the dynamically generated custom object tools
+4. Merges the 41 static tools with the dynamically generated custom object tools
 5. Enforces the 100-tool manifest cap (see [Manifest Size Guard](#manifest-size-guard))
 6. Returns the complete tool list
 
@@ -234,7 +234,7 @@ src/
     ├── sequences.js                # 4 sequence/campaign tools
     ├── tasks.js                    # 5 task tools
     ├── notes.js                    # 2 note tools
-    ├── messages.js                 # 3 message tools
+    ├── messages.js                 # 2 message tools
     ├── purchases.js                # 5 purchase/order read tools
     ├── transactions.js             # 6 transaction write tools
     ├── products.js                 # 2 product tools
@@ -321,13 +321,12 @@ test/
 | `create_note` | Create a note attached to a contact record. | `POST /objects` (objectID=12) |
 | `get_notes` | Retrieve notes, optionally filtered by contact. | `GET /objects` (objectID=12) |
 
-### Messages (3 tools)
+### Messages (2 tools)
 
 | Tool | Description | API Endpoint |
 |------|-------------|-------------|
 | `get_messages` | List available email, SMS, and task messages. | `GET /Messages` |
 | `get_message` | Get a single message with full content. | `GET /Message` |
-| `send_message` | Send a pre-built message to a contact. | `POST /message` |
 
 ### Purchases & Orders (5 tools)
 
@@ -470,7 +469,7 @@ Error response format:
 
 If an account has many custom objects, the manifest can exceed what fits in an LLM's context window. The server enforces a maximum of **100 tools**:
 
-1. All 42 static tools are always included
+1. All 41 static tools are always included
 2. Custom objects are sorted by most recently modified
 3. Custom object tools are included in groups of 4 (one complete object at a time) until the limit is reached
 4. If truncated, a `_manifest_note` tool is added telling the agent that additional objects exist and can be discovered via `get_object_meta`
@@ -499,7 +498,7 @@ The server does not add its own rate limiting. It inherits Ontraport's limit of 
 npm test
 ```
 
-The test suite includes **86 tests across 17 suites**:
+The test suite includes **85 tests across 17 suites**:
 
 | Suite | Coverage |
 |-------|----------|
@@ -514,7 +513,7 @@ The test suite includes **86 tests across 17 suites**:
 | `tools/sequences.test.js` | All 4 sequence tools — sub_type defaults, correct methods |
 | `tools/tasks.test.js` | All 5 task tools — correct body structure |
 | `tools/notes.test.js` | Both note tools — objectID=12 injection |
-| `tools/messages.test.js` | All 3 message tools — correct endpoints |
+| `tools/messages.test.js` | All 2 message tools — correct endpoints |
 | `tools/purchases.test.js` | All 5 purchase/order tools — correct endpoints |
 | `tools/transactions.test.js` | All 6 transaction write tools — correct methods and paths |
 | `tools/products.test.js` | Both product tools — correct endpoints |

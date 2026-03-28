@@ -390,20 +390,6 @@ const staticTools = [
     },
     module: 'messages',
   },
-  {
-    name: 'send_message',
-    description: "Send a specific pre-built message (email or SMS) to a single contact. The message must already exist in the account — this tool triggers delivery, not creation.",
-    inputSchema: {
-      type: 'object',
-      properties: {
-        contact_id: { type: 'integer', description: 'Contact ID to send to.' },
-        message_id: { type: 'integer', description: 'Message template ID to send.' },
-      },
-      required: ['contact_id', 'message_id'],
-    },
-    module: 'messages',
-  },
-
   // ── Purchases & Orders (Read) ──
   {
     name: 'get_purchases',

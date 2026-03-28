@@ -3,7 +3,6 @@ const messages = require('../../src/tools/messages');
 function mockClient() {
   return {
     get: jest.fn().mockResolvedValue({ data: [] }),
-    post: jest.fn().mockResolvedValue({ data: {} }),
   };
 }
 
@@ -18,11 +17,5 @@ describe('Message tools', () => {
     const client = mockClient();
     await messages.get_message(client, { id: 5 });
     expect(client.get).toHaveBeenCalledWith('/Message', { id: 5 });
-  });
-
-  it('send_message posts correct body', async () => {
-    const client = mockClient();
-    await messages.send_message(client, { contact_id: 27, message_id: 5 });
-    expect(client.post).toHaveBeenCalledWith('/message', { contact_id: 27, message_id: 5 });
   });
 });

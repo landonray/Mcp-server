@@ -51,7 +51,6 @@ const staticHandlers = {
   // Messages
   get_messages: messages.get_messages,
   get_message: messages.get_message,
-  send_message: messages.send_message,
 
   // Purchases & Orders (Read)
   get_purchases: purchases.get_purchases,
