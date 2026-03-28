@@ -485,9 +485,12 @@ The server does not add its own rate limiting. It inherits Ontraport's limit of 
 ## Security
 
 - **Credential passthrough** — `Api-Key` and `Api-Appid` are forwarded to Ontraport on each call and never stored.
+- **Session credential binding** — Sessions are bound to credentials via SHA-256 hash. Returning requests must present the same `Api-Key`/`Api-Appid` that created the session. Prevents session hijacking across accounts.
+- **Auth on all endpoints** — `Api-Key` and `Api-Appid` headers are validated on every request — POST, GET (SSE), and DELETE — not just session creation.
 - **Per-session isolation** — Each agent connection gets its own `Server` instance scoped to its credentials. No shared mutable state between sessions.
+- **Session TTL** — Abandoned sessions are automatically cleaned up after 30 minutes of inactivity. A background sweep runs every 5 minutes to prevent memory leaks.
 - **No logging of credentials** — Error handlers log only `err.message`, never full error objects that could contain credentials in stack traces.
-- **No persistence** — The server has no database, no file storage. In-memory sessions track only the MCP transport lifecycle and are cleaned up on disconnect.
+- **No persistence** — The server has no database, no file storage. In-memory sessions track only the MCP transport lifecycle.
 - **Scope enforcement** — Permissions are enforced by Ontraport's existing API key scope system. If a key lacks a scope, the API call fails and the server surfaces the error.
 
 ---
