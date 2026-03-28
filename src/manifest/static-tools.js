@@ -534,7 +534,7 @@ const staticTools = [
   },
   {
     name: 'process_transaction',
-    description: "Charge a contact's card on file to process a new transaction. Requires an offer with products and a payer_id referencing a credit card already saved on the contact's record. This tool does NOT accept new card details — only cards on file. Agents should confirm with the user before executing, as this charges real money.",
+    description: "Charge a contact's card on file to process a new transaction. Supports one-time purchases, subscriptions (recurring billing), payment plans (installments), and trial periods. Requires an offer with products and a payer_id referencing a credit card already saved on the contact's record. This tool does NOT accept new card details — only cards on file. When the offer includes a subscription or payment plan, Ontraport charges the first payment and automatically creates open orders for future charges. Agents should confirm with the user before executing, as this charges real money.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -542,7 +542,7 @@ const staticTools = [
         payer_id: { type: 'integer', description: "ID of the credit card on file to charge. Use the contact's saved card ID." },
         offer: {
           type: 'object',
-          description: 'Offer data containing products and pricing. Structure: { products: [{ id: <product_id>, quantity: <qty>, ... }], ... }. Use list_products and get_product to find product IDs.',
+          description: 'Offer data containing products and optional recurring billing. Structure: { products: [{ id: <product_id>, quantity: <qty> }], subscriptions: [{ product_id, price, unit: "month"|"week"|"year", frequency: <n> }], paymentPlans: [{ product_id, num_payments, unit, frequency }], trials: [{ product_id, days, price }] }. Use list_products to find product IDs. Subscriptions and payment plans cannot coexist on the same product.',
         },
         gateway_id: { type: 'integer', description: 'Payment gateway ID. Required if the account has multiple gateways.' },
         invoice_template: { type: 'integer', description: 'Invoice template ID. Use 0 to suppress invoice email, or 1 for default.' },
@@ -565,14 +565,14 @@ const staticTools = [
   },
   {
     name: 'log_transaction',
-    description: "Record a transaction without processing any payment. Use this to log offline sales (cash, check, wire transfer) or to document transactions that were handled outside of Ontraport. No card is charged.",
+    description: "Record a transaction without processing any payment. Use this to log offline sales (cash, check, wire transfer) or to document transactions that were handled outside of Ontraport. No card is charged. Supports the same offer structure as process_transaction including subscriptions and payment plans.",
     inputSchema: {
       type: 'object',
       properties: {
         contact_id: { type: 'integer', description: 'Contact ID to log the transaction for.' },
         offer: {
           type: 'object',
-          description: 'Offer data containing products and pricing. Structure: { products: [{ id: <product_id>, quantity: <qty>, ... }], ... }.',
+          description: 'Offer data containing products and optional recurring billing. Same structure as process_transaction: { products: [...], subscriptions: [...], paymentPlans: [...], trials: [...] }.',
         },
         invoice_template: { type: 'integer', description: 'Invoice template ID. Use 0 to suppress invoice email, or 1 for default.' },
       },
