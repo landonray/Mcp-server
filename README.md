@@ -59,8 +59,10 @@ The server is a **translation layer**. It receives tool calls from AI agents, au
 
 **Key properties:**
 
-- **Stateless** — No database, no session storage, no caching. All state lives in Ontraport.
-- **Single endpoint** — All MCP communication goes through `POST /v1` using the Streamable HTTP transport.
+- **Built on the official MCP SDK** — Uses `@modelcontextprotocol/sdk` with `StreamableHTTPServerTransport` for protocol-compliant transport and session management.
+- **Stateless** — No database, no persistent session storage, no caching. All state lives in Ontraport. In-memory sessions track only the MCP transport lifecycle.
+- **Full MCP endpoint** — `POST /v1` for requests, `GET /v1` for SSE notification streams, `DELETE /v1` for session termination. Plus `GET /v1/health` for monitoring.
+- **Per-session isolation** — Each agent connection gets its own `Server` + `Transport` pair scoped to its credentials. No cross-session state leakage.
 - **Dynamic manifest** — The tool list is generated fresh on every `tools/list` call by querying the Ontraport account's object metadata.
 - **Credential passthrough** — The server forwards `Api-Key` and `Api-Appid` headers directly to the Ontraport API. It never stores, caches, or logs credentials.
 
@@ -95,9 +97,10 @@ This endpoint requires no authentication and is intended for uptime monitoring.
 ```bash
 curl -X POST http://localhost:3000/v1 \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "Api-Key: YOUR_API_KEY" \
   -H "Api-Appid: YOUR_APP_ID" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"1.0"},"capabilities":{}}}'
 ```
 
 Response:
@@ -140,14 +143,14 @@ Every request follows the same path:
 ```
 Agent sends JSON-RPC request to POST /v1
   ↓
-Transport layer validates Api-Key + Api-Appid headers (401 if missing)
+Express validates Api-Key + Api-Appid headers (401 if missing)
   ↓
-Transport layer validates JSON-RPC envelope (400 if malformed)
+Looks up or creates a session (Server + StreamableHTTPServerTransport pair)
   ↓
-Handler routes by method:
-  • initialize     → returns server info + capabilities
-  • tools/list     → builds dynamic manifest via /objects/meta
-  • tools/call     → dispatches to tool handler
+SDK handles JSON-RPC framing, protocol negotiation, and method routing:
+  • initialize     → returns server info + capabilities (handled by SDK)
+  • tools/list     → our handler builds dynamic manifest via /objects/meta
+  • tools/call     → our handler dispatches to tool implementation
   ↓
 Tool handler:
   1. Validates input parameters
@@ -156,6 +159,8 @@ Tool handler:
   4. Cleans response (strips noise fields)
   5. Returns structured result
 ```
+
+The SDK's `StreamableHTTPServerTransport` handles the full MCP Streamable HTTP spec including session management (`Mcp-Session-Id` header), SSE streaming for server notifications (`GET /v1`), and session termination (`DELETE /v1`).
 
 ### Dynamic Manifest Generation
 
@@ -209,11 +214,11 @@ Cleaning is applied recursively to nested objects and arrays.
 
 ```
 src/
-├── index.js                        # Express app entry point
+├── index.js                        # Express app: auth, session management, HTTP routing
 ├── errors.js                       # Structured error builders (400–500 taxonomy)
 ├── mcp/
-│   ├── transport.js                # HTTP routing: POST /v1, GET /v1/health
-│   └── handler.js                  # JSON-RPC method dispatcher
+│   └── server.js                   # MCP Server factory: creates per-session Server instances
+│                                   #   with tools/list and tools/call handlers registered
 ├── manifest/
 │   ├── static-tools.js             # All 42 static tool definitions (single source of truth)
 │   ├── custom-object-tools.js      # Generates 4 tools per custom object
@@ -238,7 +243,8 @@ src/
 
 test/
 ├── health.test.js                  # Health endpoint
-├── auth.test.js                    # Authentication validation
+├── auth.test.js                    # Authentication validation (SDK transport)
+├── mcp-server.test.js              # MCP Server factory
 ├── error-handling.test.js          # Error taxonomy
 ├── response-cleaner.test.js        # Response cleaning
 ├── manifest.test.js                # Manifest generation, cap, truncation
@@ -260,7 +266,7 @@ test/
 
 - **Single source of truth** — All tool definitions (names, descriptions, input schemas) live in `static-tools.js`. The manifest, input validation, and handler dispatch all derive from this one file.
 - **One pattern** — Every tool handler follows the same shape: validate inputs, construct the Ontraport API call, execute it, return the result. Error handling is handled by the client and transport layers.
-- **No abstraction without repetition** — Each tool module is a flat set of exported async functions. No base classes, no middleware chains, no framework beyond Express.
+- **No abstraction without repetition** — Each tool module is a flat set of exported async functions. No base classes, no middleware chains, no framework beyond Express and the MCP SDK.
 
 ---
 
@@ -480,8 +486,9 @@ The server does not add its own rate limiting. It inherits Ontraport's limit of 
 ## Security
 
 - **Credential passthrough** — `Api-Key` and `Api-Appid` are forwarded to Ontraport on each call and never stored.
+- **Per-session isolation** — Each agent connection gets its own `Server` instance scoped to its credentials. No shared mutable state between sessions.
 - **No logging of credentials** — Error handlers log only `err.message`, never full error objects that could contain credentials in stack traces.
-- **No persistence** — The server has no database, no file storage, no session state.
+- **No persistence** — The server has no database, no file storage. In-memory sessions track only the MCP transport lifecycle and are cleaned up on disconnect.
 - **Scope enforcement** — Permissions are enforced by Ontraport's existing API key scope system. If a key lacks a scope, the API call fails and the server surfaces the error.
 
 ---
@@ -492,12 +499,13 @@ The server does not add its own rate limiting. It inherits Ontraport's limit of 
 npm test
 ```
 
-The test suite includes **85 tests across 16 suites**:
+The test suite includes **86 tests across 17 suites**:
 
 | Suite | Coverage |
 |-------|----------|
 | `health.test.js` | Health endpoint returns 200, no auth required |
-| `auth.test.js` | Missing headers → 401, invalid JSON-RPC → 400, valid auth → 200 |
+| `auth.test.js` | Missing headers → 401, valid auth + SDK initialize → 200 |
+| `mcp-server.test.js` | Server factory creates isolated per-credential instances |
 | `error-handling.test.js` | All error types, toJSON format, fromHttpStatus mapping |
 | `response-cleaner.test.js` | Strips all 10 noise fields, recursive cleaning, null handling |
 | `manifest.test.js` | Static tools, custom objects, built-in ID exclusion, 100-tool cap, truncation at object boundaries, no internal field leaks, failure propagation |
