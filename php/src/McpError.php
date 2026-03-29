@@ -6,9 +6,14 @@ namespace OntraportMcp;
 
 class McpError extends \Exception
 {
-    public int $statusCode;
-    public string $errorType;
-    public ?string $retryAfter;
+    /** @var int */
+    public $statusCode;
+
+    /** @var string */
+    public $errorType;
+
+    /** @var string|null */
+    public $retryAfter;
 
     public function __construct(int $statusCode, string $errorType, string $message)
     {
@@ -66,15 +71,15 @@ class McpError extends \Exception
 
     public static function fromHttpStatus(int $status, string $message = ''): self
     {
-        return match ($status) {
-            400 => self::badRequest($message ?: 'Bad request'),
-            401 => self::unauthorized($message ?: 'Unauthorized'),
-            403 => self::forbidden($message ?: 'Forbidden'),
-            404 => self::notFound($message ?: 'Not found'),
-            422 => self::unprocessable($message ?: 'Unprocessable entity'),
-            429 => self::rateLimited(),
-            500 => self::serverError($message ?: 'Server error'),
-            default => new self($status, 'unknown_error', $message ?: "Unexpected error (HTTP {$status})"),
-        };
+        switch ($status) {
+            case 400: return self::badRequest($message ?: 'Bad request');
+            case 401: return self::unauthorized($message ?: 'Unauthorized');
+            case 403: return self::forbidden($message ?: 'Forbidden');
+            case 404: return self::notFound($message ?: 'Not found');
+            case 422: return self::unprocessable($message ?: 'Unprocessable entity');
+            case 429: return self::rateLimited();
+            case 500: return self::serverError($message ?: 'Server error');
+            default: return new self($status, 'unknown_error', $message ?: "Unexpected error (HTTP {$status})");
+        }
     }
 }

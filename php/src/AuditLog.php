@@ -6,11 +6,15 @@ namespace OntraportMcp;
 
 class AuditLog
 {
-    private static ?string $logFile = null;
+    /** @var string|null */
+    private static $logFile = null;
 
     public static function init(?string $logDir = null): void
     {
-        $logDir = $logDir ?: getenv('MCP_LOG_DIR') ?: getcwd() . '/logs';
+        if ($logDir === null) {
+            $envDir = getenv('MCP_LOG_DIR');
+            $logDir = $envDir ? $envDir : getcwd() . '/logs';
+        }
 
         if (!is_dir($logDir)) {
             @mkdir($logDir, 0755, true);
@@ -37,13 +41,13 @@ class AuditLog
     {
         self::write([
             'event' => 'tool_call',
-            'sessionId' => $data['sessionId'] ?? null,
-            'credentialHash' => $data['credentialHash'] ?? null,
+            'sessionId' => isset($data['sessionId']) ? $data['sessionId'] : null,
+            'credentialHash' => isset($data['credentialHash']) ? $data['credentialHash'] : null,
             'tool' => $data['tool'],
-            'args' => self::sanitizeArgs($data['args'] ?? []),
-            'durationMs' => $data['durationMs'] ?? null,
-            'status' => $data['status'], // 'success' | 'error'
-            'error' => $data['error'] ?? null,
+            'args' => self::sanitizeArgs(isset($data['args']) ? $data['args'] : []),
+            'durationMs' => isset($data['durationMs']) ? $data['durationMs'] : null,
+            'status' => $data['status'],
+            'error' => isset($data['error']) ? $data['error'] : null,
         ]);
     }
 
@@ -51,21 +55,21 @@ class AuditLog
     {
         self::write([
             'event' => 'tools_list',
-            'sessionId' => $data['sessionId'] ?? null,
-            'credentialHash' => $data['credentialHash'] ?? null,
-            'toolCount' => $data['toolCount'] ?? 0,
-            'durationMs' => $data['durationMs'] ?? null,
+            'sessionId' => isset($data['sessionId']) ? $data['sessionId'] : null,
+            'credentialHash' => isset($data['credentialHash']) ? $data['credentialHash'] : null,
+            'toolCount' => isset($data['toolCount']) ? $data['toolCount'] : 0,
+            'durationMs' => isset($data['durationMs']) ? $data['durationMs'] : null,
             'status' => $data['status'],
-            'error' => $data['error'] ?? null,
+            'error' => isset($data['error']) ? $data['error'] : null,
         ]);
     }
 
     public static function logSession(array $data): void
     {
         self::write([
-            'event' => $data['event'], // 'session_created' | 'session_expired' | 'session_closed' | 'session_auth_failed'
-            'sessionId' => $data['sessionId'] ?? null,
-            'credentialHash' => $data['credentialHash'] ?? null,
+            'event' => $data['event'],
+            'sessionId' => isset($data['sessionId']) ? $data['sessionId'] : null,
+            'credentialHash' => isset($data['credentialHash']) ? $data['credentialHash'] : null,
         ]);
     }
 
@@ -74,14 +78,15 @@ class AuditLog
         self::write([
             'event' => 'auth_failure',
             'reason' => $data['reason'],
-            'ip' => $data['ip'] ?? null,
+            'ip' => isset($data['ip']) ? $data['ip'] : null,
         ]);
     }
 
     /**
-     * Strip sensitive values from tool arguments before logging.
+     * @param mixed $args
+     * @return mixed
      */
-    public static function sanitizeArgs(mixed $args): mixed
+    public static function sanitizeArgs($args)
     {
         if (!is_array($args)) {
             return $args;

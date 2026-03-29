@@ -10,8 +10,11 @@ class Client
 {
     private const BASE_URL = 'https://api.ontraport.com/1';
 
-    private string $apiKey;
-    private string $appId;
+    /** @var string */
+    private $apiKey;
+
+    /** @var string */
+    private $appId;
 
     public function __construct(string $apiKey, string $appId)
     {
@@ -21,22 +24,22 @@ class Client
 
     public function get(string $path, array $params = []): array
     {
-        return $this->request('GET', $path, params: $params);
+        return $this->request('GET', $path, $params);
     }
 
     public function post(string $path, array $body = []): array
     {
-        return $this->request('POST', $path, body: $body);
+        return $this->request('POST', $path, [], $body);
     }
 
     public function put(string $path, array $body = []): array
     {
-        return $this->request('PUT', $path, body: $body);
+        return $this->request('PUT', $path, [], $body);
     }
 
     public function delete(string $path, array $params = [], array $body = []): array
     {
-        return $this->request('DELETE', $path, params: $params, body: $body);
+        return $this->request('DELETE', $path, $params, $body);
     }
 
     private function request(string $method, string $path, array $params = [], array $body = []): array
@@ -44,7 +47,10 @@ class Client
         $url = self::BASE_URL . $path;
 
         if (!empty($params)) {
-            $qs = http_build_query(array_filter($params, fn($v) => $v !== null));
+            $filtered = array_filter($params, function ($v) {
+                return $v !== null;
+            });
+            $qs = http_build_query($filtered);
             if ($qs) {
                 $url .= '?' . $qs;
             }
@@ -78,7 +84,7 @@ class Client
         }
 
         $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         curl_close($ch);
 
@@ -90,7 +96,10 @@ class Client
             throw McpError::rateLimited();
         }
 
-        $data = json_decode($response, true) ?? [];
+        $data = json_decode($response, true);
+        if ($data === null) {
+            $data = [];
+        }
 
         if ($httpCode >= 400) {
             $message = $data['message'] ?? $data['error'] ?? "Ontraport API error (HTTP {$httpCode})";

@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace OntraportMcp\Tools;
 
-use OntraportMcp\Manifest\CustomObjectTools;
-use OntraportMcp\Ontraport\Client;
-
 class Registry
 {
     private const STATIC_HANDLERS = [
-        // Contacts
         'get_contact' => [Contacts::class, 'get_contact'],
         'search_contacts' => [Contacts::class, 'search_contacts'],
         'create_contact' => [Contacts::class, 'create_contact'],
@@ -18,45 +14,31 @@ class Registry
         'update_contact' => [Contacts::class, 'update_contact'],
         'delete_contact' => [Contacts::class, 'delete_contact'],
         'get_contact_count' => [Contacts::class, 'get_contact_count'],
-
-        // Tags
         'add_tag_by_name' => [Tags::class, 'add_tag_by_name'],
         'remove_tag_by_name' => [Tags::class, 'remove_tag_by_name'],
         'add_tag_by_id' => [Tags::class, 'add_tag_by_id'],
         'remove_tag_by_id' => [Tags::class, 'remove_tag_by_id'],
         'get_contacts_by_tag' => [Tags::class, 'get_contacts_by_tag'],
         'list_tags' => [Tags::class, 'list_tags'],
-
-        // Sequences & Campaigns
         'subscribe_to_sequence' => [Sequences::class, 'subscribe_to_sequence'],
         'unsubscribe_from_sequence' => [Sequences::class, 'unsubscribe_from_sequence'],
         'pause_rules_and_sequences' => [Sequences::class, 'pause_rules_and_sequences'],
         'unpause_rules_and_sequences' => [Sequences::class, 'unpause_rules_and_sequences'],
-
-        // Tasks
         'assign_task' => [Tasks::class, 'assign_task'],
         'complete_task' => [Tasks::class, 'complete_task'],
         'cancel_task' => [Tasks::class, 'cancel_task'],
         'update_task' => [Tasks::class, 'update_task'],
         'get_tasks' => [Tasks::class, 'get_tasks'],
         'reschedule_task' => [Tasks::class, 'reschedule_task'],
-
-        // Notes
         'create_note' => [Notes::class, 'create_note'],
         'get_notes' => [Notes::class, 'get_notes'],
-
-        // Messages
         'get_messages' => [Messages::class, 'get_messages'],
         'get_message' => [Messages::class, 'get_message'],
-
-        // Purchases & Orders (Read)
         'get_purchases' => [Purchases::class, 'get_purchases'],
         'get_purchase_logs' => [Purchases::class, 'get_purchase_logs'],
         'get_transactions' => [Purchases::class, 'get_transactions'],
         'get_orders' => [Purchases::class, 'get_orders'],
         'get_open_orders' => [Purchases::class, 'get_open_orders'],
-
-        // Transactions (Write)
         'refund_transaction' => [Transactions::class, 'refund_transaction'],
         'void_transaction' => [Transactions::class, 'void_transaction'],
         'write_off_transaction' => [Transactions::class, 'write_off_transaction'],
@@ -72,12 +54,8 @@ class Registry
         'pay_invoice' => [Transactions::class, 'pay_invoice'],
         'get_order' => [Transactions::class, 'get_order'],
         'update_order' => [Transactions::class, 'update_order'],
-
-        // Products
         'list_products' => [Products::class, 'list_products'],
         'get_product' => [Products::class, 'get_product'],
-
-        // Metadata
         'get_object_meta' => [Metadata::class, 'get_object_meta'],
         'get_collection_count' => [Metadata::class, 'get_collection_count'],
     ];
@@ -91,13 +69,13 @@ class Registry
     ];
 
     /**
-     * Parse a tool name to extract custom object operation and suffix.
+     * @return array|null ['operation' => string, 'suffix' => string]
      */
     public static function parseCustomToolName(string $toolName): ?array
     {
         foreach (self::CUSTOM_OPS as $op) {
             $prefix = "{$op}_";
-            if (str_starts_with($toolName, $prefix)) {
+            if (strncmp($toolName, $prefix, strlen($prefix)) === 0) {
                 $suffix = substr($toolName, strlen($prefix));
                 if (!isset(self::STATIC_HANDLERS[$toolName]) && $suffix !== '') {
                     return ['operation' => $op, 'suffix' => $suffix];
@@ -108,27 +86,26 @@ class Registry
     }
 
     /**
-     * Get a handler callable for a tool.
-     *
      * @param string $toolName
-     * @param array<string, int> $customObjectMap safeName → objectTypeId
-     * @return callable|null Returns fn(Client, array): array or null
+     * @param array<string, int> $customObjectMap
+     * @return callable|null
      */
     public static function getHandler(string $toolName, array $customObjectMap = []): ?callable
     {
-        // Static handler
         if (isset(self::STATIC_HANDLERS[$toolName])) {
             $handler = self::STATIC_HANDLERS[$toolName];
-            return fn(Client $client, array $params) => call_user_func($handler, $client, $params);
+            return function ($client, array $params) use ($handler) {
+                return call_user_func($handler, $client, $params);
+            };
         }
 
-        // Custom object handler
         $parsed = self::parseCustomToolName($toolName);
         if ($parsed !== null && isset($customObjectMap[$parsed['suffix']])) {
             $objectTypeId = $customObjectMap[$parsed['suffix']];
             $method = self::CUSTOM_HANDLER_MAP[$parsed['operation']];
-            return fn(Client $client, array $params) =>
-                CustomObjects::$method($client, $params, $objectTypeId);
+            return function ($client, array $params) use ($method, $objectTypeId) {
+                return CustomObjects::$method($client, $params, $objectTypeId);
+            };
         }
 
         return null;

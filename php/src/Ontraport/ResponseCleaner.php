@@ -19,14 +19,17 @@ class ResponseCleaner
         'account_id',
     ];
 
-    public static function clean(mixed $data): mixed
+    /**
+     * @param mixed $data
+     * @return mixed
+     */
+    public static function clean($data)
     {
         if ($data === null) {
             return null;
         }
 
         if (is_array($data)) {
-            // Check if it's an associative array (object-like)
             if (array_is_list($data)) {
                 return array_map([self::class, 'clean'], $data);
             }
