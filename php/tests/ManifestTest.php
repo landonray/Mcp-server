@@ -44,7 +44,7 @@ class ManifestTest extends TestCase
         $tools = CustomObjectTools::generate('My Widget', 10000);
         $this->assertCount(4, $tools);
 
-        $names = array_map(fn($t) => $t['name'], $tools);
+        $names = array_map(function ($t) { return $t['name']; }, $tools);
         sort($names);
         $this->assertEquals([
             'create_My_Widget',

@@ -1,30 +1,27 @@
 #!/usr/bin/env php
 <?php
 /**
- * Ontraport MCP Server — PHP Implementation
+ * Ontraport MCP Server — PHP Implementation (PHP 7.4+)
  *
- * Usage (stdio transport, credentials via environment):
+ * Usage:
  *   API_KEY=your-key API_APPID=your-appid php server.php
- *
- * Usage (HTTP transport):
- *   API_KEY=your-key API_APPID=your-appid php server.php --http --port=3000
  */
 
 declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
 
+// Load polyfills for PHP 7.4 compatibility
+OntraportMcp\Compat::init();
+
 use OntraportMcp\AuditLog;
 use OntraportMcp\Mcp\ServerFactory;
-use PhpMcp\Server\Transports\StdioServerTransport;
-use PhpMcp\Server\Transports\StreamableHttpServerTransport;
+use OntraportMcp\Mcp\StdioTransport;
 
-// Initialize audit logging
 AuditLog::init();
 
-// Read credentials from environment
-$apiKey = getenv('API_KEY') ?: getenv('Api_Key') ?: '';
-$appId = getenv('API_APPID') ?: getenv('Api_Appid') ?: '';
+$apiKey = getenv('API_KEY') ?: (getenv('Api_Key') ?: '');
+$appId = getenv('API_APPID') ?: (getenv('Api_Appid') ?: '');
 
 if (empty($apiKey) || empty($appId)) {
     fwrite(STDERR, "Error: API_KEY and API_APPID environment variables are required.\n");
@@ -32,16 +29,6 @@ if (empty($apiKey) || empty($appId)) {
     exit(1);
 }
 
-// Parse CLI arguments
-$useHttp = in_array('--http', $argv);
-$port = 3000;
-foreach ($argv as $arg) {
-    if (str_starts_with($arg, '--port=')) {
-        $port = (int) substr($arg, 7);
-    }
-}
-
-// Credential hash for audit logging (never log the actual credentials)
 $credentialHash = hash('sha256', "{$apiKey}:{$appId}");
 
 AuditLog::logSession([
@@ -49,17 +36,8 @@ AuditLog::logSession([
     'credentialHash' => $credentialHash,
 ]);
 
-// Create the MCP server with all tools registered
-fwrite(STDERR, "Building tool manifest...\n");
-$server = ServerFactory::create($apiKey, $appId, $credentialHash);
+fwrite(STDERR, "Starting Ontraport MCP Server (stdio)...\n");
 
-// Start listening
-if ($useHttp) {
-    fwrite(STDERR, "Starting HTTP transport on port {$port}...\n");
-    $transport = new StreamableHttpServerTransport(host: '0.0.0.0', port: $port);
-} else {
-    fwrite(STDERR, "Starting stdio transport...\n");
-    $transport = new StdioServerTransport();
-}
-
-$server->listen($transport);
+$handler = ServerFactory::createHandler($apiKey, $appId, $credentialHash);
+$transport = new StdioTransport($handler);
+$transport->listen();
