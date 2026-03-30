@@ -23,7 +23,7 @@
   },
   {
     "name": "search_contacts",
-    "description": "Search for contacts matching specific criteria. Supports field-value conditions (e.g., last name equals 'Smith'), tag filters, and free-text search across all fields. Results are paginated with a maximum of 50 per request. Use get_contact_count first if you need to know total results before paginating.",
+    "description": "Search for contacts and return their full records. Does NOT return a count — use get_contact_count for that. Supports field-value conditions (e.g., last name equals 'Smith'), tag filters, and free-text search across all fields. Results are paginated with a maximum of 50 per request.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -158,7 +158,7 @@
   },
   {
     "name": "get_contact_count",
-    "description": "Retrieve the total number of contacts matching optional criteria without returning the contacts themselves. Use this before paginating search_contacts to know how many pages to expect.",
+    "description": "Count how many contacts match optional criteria. Returns only the count, not the contact records. This is the correct tool when you need to know how many contacts exist or match a filter — do not use search_contacts for counting.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1330,7 +1330,7 @@
   },
   {
     "name": "get_collection_count",
-    "description": "Retrieve the count of records in any object collection matching optional criteria. Use this for pagination planning or dashboard-style counts.",
+    "description": "Count how many records exist in any object collection matching optional criteria. Returns only the count, not the records. For contacts specifically, you can also use get_contact_count (objectID 0). Use this for pagination planning or dashboard-style counts on any object type.",
     "inputSchema": {
       "type": "object",
       "properties": {
